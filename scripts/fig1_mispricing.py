@@ -23,7 +23,11 @@ def main() -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    # Group by method: (nominal_ratio -> realized_fraction), one model/context (take the modal one).
+    cells = [c for c in cells if not c.get("failed")]
+    # One model, one context length for a clean figure: use the largest context present.
+    ctx = max(c["context_len"] for c in cells if "context_len" in c)
+    cells = [c for c in cells if c.get("context_len") == ctx]
+
     series: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for c in cells:
         full = c.get("full_cache_bytes")
@@ -43,9 +47,11 @@ def main() -> None:
         ax.plot(xs, ys, marker="o", label=method)
     ax.set_xlabel("nominal compression ratio (fraction of tokens retained)")
     ax.set_ylabel("realized KV bytes / full-cache bytes")
-    ax.set_ylim(0, 1.05)
-    ax.legend(fontsize=8, loc="upper left")
-    ax.set_title("Ratios are not bytes")
+    ax.axhline(1.0, color="0.6", lw=0.8, ls=":")
+    ymax = max(1.12, max(y for pts in series.values() for _, y in pts) + 0.03)
+    ax.set_ylim(0, ymax)
+    ax.legend(fontsize=8, loc="center left", bbox_to_anchor=(1.01, 0.5))
+    ax.set_title(f"Ratios are not bytes (ctx={ctx})")
     fig.tight_layout()
     fig.savefig(args.out)
     print(f"[fig1] wrote {args.out} from {len(cells)} cells, {len(series)} methods")

@@ -24,6 +24,11 @@ from kvbench import bytes as kb
 from kvbench import device as kvdev
 from kvbench.presses import REGISTRY, build_press, classify_measured
 
+# Attention-score methods need the materialized attention matrix, so they cannot use SDPA/Flash
+# kernels — they require eager attention. That incompatibility is itself a systems finding
+# (cf. KeyDiff, arXiv:2504.15364); we record it rather than hide it.
+EAGER_METHODS = {"observed_attention"}
+
 
 def cell_id(model: str, ctx: int, press: str, ratio: float) -> str:
     safe_model = model.replace("/", "_")
@@ -105,14 +110,22 @@ def main() -> int:
     for model_name in cfg["models"]:
         print(f"loading {model_name} ...")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name, torch_dtype=dtype, attn_implementation="sdpa"
-        ).to(device).eval()
-        modules = kb.collect_attention_modules(model)
+        models: dict[str, object] = {}  # attn_impl -> model, loaded lazily
+
+        def get_model(attn_impl: str):
+            if attn_impl not in models:
+                m = AutoModelForCausalLM.from_pretrained(
+                    model_name, torch_dtype=dtype, attn_implementation=attn_impl
+                ).to(device).eval()
+                models[attn_impl] = m
+            return models[attn_impl]
 
         for ctx in cfg["context_lengths"]:
-            input_ids = make_context(tokenizer, ctx, device)
             for press_name in cfg["methods"]:
+                attn_impl = "eager" if press_name in EAGER_METHODS else "sdpa"
+                model = get_model(attn_impl)
+                modules = kb.collect_attention_modules(model)
+                input_ids = make_context(tokenizer, ctx, device)
                 for ratio in cfg["ratios"]:
                     cid = cell_id(model_name, ctx, press_name, ratio)
                     path = os.path.join(args.results, cid + ".json")
@@ -131,7 +144,7 @@ def main() -> int:
                             json.dump(fail, f, indent=2)
                         print(f"  {cid}: FAILED {e!r}")
 
-        del model
+        models.clear()
         kvdev.empty_cache(device)
 
     print("done.")
