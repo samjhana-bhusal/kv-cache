@@ -1,0 +1,26 @@
+# Phase-2 byte-audit pilot. No accuracy eval — measures realized bytes vs nominal ratio.
+# Small open GQA model (no HF gating) so the audit runs locally on 16 GB / MPS.
+# The finding is architecture-general; the extended run adds Llama-3.1-8B (MHA-ish) on the GPU box.
+
+models:
+  - Qwen/Qwen2.5-0.5B-Instruct   # GQA: 2 KV heads, 14 query heads — exercises the GQA argument
+
+context_lengths:
+  - 1024
+  - 2048
+
+# Sweep the field's knob from aggressive to mild.
+ratios:
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+# One per taxonomy region + the query-aware pair. observed_attention ~ H2O.
+methods:
+  - random               # memory-faithful, trivial
+  - streaming_llm        # memory-faithful, sinks+recency
+  - snapkv               # memory-faithful, query-aware (observation window)
+  - observed_attention   # memory-faithful, ~H2O
+  - adakv                # simulation-only — the positive control (should stay ~1.0)
+  - think                # incommensurable (channel pruning)
