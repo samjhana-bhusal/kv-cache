@@ -1,0 +1,22 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc
+reports/figures/*.pdf   # generated from results/ by scripts/ — regenerate, don't commit
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Models / large artifacts
+*.safetensors
+*.bin
+hf_cache/

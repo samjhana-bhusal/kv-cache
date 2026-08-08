@@ -1,0 +1,414 @@
+% refs.bib — KV cache compression, byte-accounting audit paper.
+% Every entry carries an `eprint` (arXiv) or DOI so scripts/verify_bib.py can resolve it.
+% Entries NOT yet machine-verified are marked `% UNVERIFIED` on the line above; verify_bib.py
+% fails the build until that comment is gone and the arXiv metadata matches.
+
+% ---------------------------------------------------------------------------
+% Concurrent / directly-scooping work — foregrounded in the paper
+% ---------------------------------------------------------------------------
+@article{luo2026queryvisibility,
+  title   = {How Query Visibility Changes {KV}-Cache Compression Rankings: A Matched-Budget Audit},
+  author  = {Luo, Daming and Liang, Christy and Xuan, Junyu},
+  journal = {arXiv preprint arXiv:2607.11942},
+  eprint  = {2607.11942},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.LG},
+  year    = {2026}
+}
+
+@article{garcia2026protection,
+  title   = {Protection Is (Nearly) All You Need: Structural Protection Dominates Scoring in Globally Capped {KV} Eviction},
+  author  = {Garcia, Gabriel},
+  journal = {arXiv preprint arXiv:2605.18053},
+  eprint  = {2605.18053},
+  archivePrefix = {arXiv},
+  year    = {2026}
+}
+
+% ---------------------------------------------------------------------------
+% Family 1 — static / heuristic eviction
+% ---------------------------------------------------------------------------
+@inproceedings{xiao2024streamingllm,
+  title     = {Efficient Streaming Language Models with Attention Sinks},
+  author    = {Xiao, Guangxuan and Tian, Yuandong and Chen, Beidi and Han, Song and Lewis, Mike},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2309.17453},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{han2024lminfinite,
+  title     = {{LM}-Infinite: Zero-Shot Extreme Length Generalization for Large Language Models},
+  author    = {Han, Chi and Wang, Qifan and Peng, Hao and Xiong, Wenhan and Chen, Yu and Ji, Heng and Wang, Sinong},
+  booktitle = {Proceedings of NAACL-HLT},
+  eprint    = {2308.16137},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+% ---------------------------------------------------------------------------
+% Family 2 — attention-score-based eviction
+% ---------------------------------------------------------------------------
+@inproceedings{zhang2023h2o,
+  title     = {{H2O}: Heavy-Hitter Oracle for Efficient Generative Inference of Large Language Models},
+  author    = {Zhang, Zhenyu and Sheng, Ying and Zhou, Tianyi and Chen, Tianlong and Zheng, Lianmin and Cai, Ruisi and Song, Zhao and Tian, Yuandong and R{\'e}, Christopher and Barrett, Clark and Wang, Zhangyang and Chen, Beidi},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2306.14048},
+  archivePrefix = {arXiv},
+  year      = {2023}
+}
+
+@inproceedings{liu2023scissorhands,
+  title     = {Scissorhands: Exploiting the Persistence of Importance Hypothesis for {LLM} {KV} Cache Compression at Test Time},
+  author    = {Liu, Zichang and Desai, Aditya and Liao, Fangshuo and Wang, Weitao and Xie, Victor and Xu, Zhaozhuo and Kyrillidis, Anastasios and Shrivastava, Anshumali},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2305.17118},
+  archivePrefix = {arXiv},
+  year      = {2023}
+}
+
+@inproceedings{oren2024tova,
+  title     = {Transformers are Multi-State {RNN}s},
+  author    = {Oren, Matanel and Hassid, Michael and Yarden, Nir and Adi, Yossi and Schwartz, Roy},
+  booktitle = {Proceedings of EMNLP},
+  eprint    = {2401.06104},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{ge2024fastgen,
+  title     = {Model Tells You What to Discard: Adaptive {KV} Cache Compression for {LLM}s},
+  author    = {Ge, Suyu and Zhang, Yunan and Liu, Liyuan and Zhang, Minjia and Han, Jiawei and Gao, Jianfeng},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2310.01801},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{adnan2024keyformer,
+  title     = {Keyformer: {KV} Cache Reduction through Key Tokens Selection for Efficient Generative Inference},
+  author    = {Adnan, Muhammad and Arunkumar, Akhil and Jain, Gaurav and Nair, Prashant J. and Soloveychik, Ilya and Kamath, Purushotham},
+  booktitle = {Proceedings of Machine Learning and Systems (MLSys)},
+  eprint    = {2403.09054},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+% ---------------------------------------------------------------------------
+% Family 3 — query-aware / observation-window selection, and its critiques
+% ---------------------------------------------------------------------------
+@inproceedings{li2024snapkv,
+  title     = {{SnapKV}: {LLM} Knows What You are Looking for Before Generation},
+  author    = {Li, Yuhong and Huang, Yingbing and Yang, Bowen and Venkitesh, Bharat and Locatelli, Acyr and Ye, Hanchen and Cai, Tianle and Lewis, Patrick and Chen, Deming},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2404.14469},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@article{cai2024pyramidkv,
+  title   = {{PyramidKV}: Dynamic {KV} Cache Compression based on Pyramidal Information Funneling},
+  author  = {Cai, Zefan and Zhang, Yichi and Gao, Bofei and Liu, Yuliang and Liu, Tianyu and Lu, Keming and Xiong, Wayne and Dong, Yue and Chang, Baobao and Hu, Junjie and Xiao, Wen},
+  journal = {arXiv preprint arXiv:2406.02069},
+  eprint  = {2406.02069},
+  archivePrefix = {arXiv},
+  year    = {2024}
+}
+
+@inproceedings{zhang2024pyramidinfer,
+  title     = {{PyramidInfer}: Pyramid {KV} Cache Compression for High-throughput {LLM} Inference},
+  author    = {Yang, Dongjie and Han, Xiaodong and Gao, Yan and Hu, Yao and Zhang, Shilin and Zhao, Hai},
+  booktitle = {Findings of the Association for Computational Linguistics: ACL},
+  eprint    = {2405.12532},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@article{liu2025judgeq,
+  title   = {Judge {Q}: Trainable Queries for Optimized Information Retention in {KV} Cache Eviction},
+  author  = {Liu, Yijun and Wang, Yixuan and Xu, Yuzhuang and Ji, Shiyu and Xu, Yang and Zhu, Qingfu and Che, Wanxiang},
+  journal = {arXiv preprint arXiv:2509.10798},
+  eprint  = {2509.10798},
+  archivePrefix = {arXiv},
+  year    = {2025}
+}
+
+@inproceedings{jang2025kvzip,
+  title     = {{KVzip}: Query-Agnostic {KV} Cache Compression with Context Reconstruction},
+  author    = {Jang, Jaehong and others},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2505.23416},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@article{park2025keydiff,
+  title   = {{KeyDiff}: Key Similarity-Based {KV} Cache Eviction for Long-Context {LLM} Inference in Resource-Constrained Environments},
+  author  = {Park, Junyoung and Jones, Dalton and Morse, Matthew and Goel, Raghavv and Lee, Mingu and Lott, Christopher},
+  journal = {arXiv preprint arXiv:2504.15364},
+  eprint  = {2504.15364},
+  archivePrefix = {arXiv},
+  year    = {2025}
+}
+
+% ---------------------------------------------------------------------------
+% Family 4 — adaptive head/layer budget allocation (the family the ratio cannot express)
+% ---------------------------------------------------------------------------
+@inproceedings{feng2025adakv,
+  title     = {{Ada-KV}: Optimizing {KV} Cache Eviction by Adaptive Budget Allocation for Efficient {LLM} Inference},
+  author    = {Feng, Yuan and Lv, Junlin and Cao, Yukun and Xie, Xike and Zhou, S. Kevin},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2407.11550},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@inproceedings{qin2025cake,
+  title     = {{CAKE}: Cascading and Adaptive {KV} Cache Eviction with Layer Preferences},
+  author    = {Qin, Ziran and Cao, Yuchen and Lin, Mingbao and Hu, Wen and Fan, Shixuan and Cheng, Ke and Lin, Weiyao and Li, Jianguo},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2503.12491},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@inproceedings{fu2025headkv,
+  title     = {Not All Heads Matter: A Head-Level {KV} Cache Compression Method with Integrated Retrieval and Reasoning},
+  author    = {Fu, Yu and Cai, Zefan and Asi, Abedelkadir and Xiong, Wayne and Dong, Yue and Xiao, Wen},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2410.19258},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@inproceedings{tang2025razorattention,
+  title     = {{RazorAttention}: Efficient {KV} Cache Compression Through Retrieval Heads},
+  author    = {Tang, Hanlin and Lin, Yang and Lin, Jing and Han, Qingsen and Hong, Shikuan and Yao, Yiwu and Wang, Gongyi},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2407.15891},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@inproceedings{xiao2025duoattention,
+  title     = {{DuoAttention}: Efficient Long-Context {LLM} Inference with Retrieval and Streaming Heads},
+  author    = {Xiao, Guangxuan and Tang, Jiaming and Zuo, Jingwei and Guo, Junxian and Yang, Shang and Tang, Haotian and Fu, Yao and Han, Song},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2410.10819},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@article{rehg2024kvcompress,
+  title   = {{KV-Compress}: Paged {KV}-Cache Compression with Variable Compression Rates per Attention Head},
+  author  = {Rehg, Isaac},
+  journal = {arXiv preprint arXiv:2410.00161},
+  eprint  = {2410.00161},
+  archivePrefix = {arXiv},
+  year    = {2024}
+}
+
+% ---------------------------------------------------------------------------
+% Family 5 — merging
+% ---------------------------------------------------------------------------
+@inproceedings{zhang2024cam,
+  title     = {{CaM}: Cache Merging for Memory-efficient {LLM}s Inference},
+  author    = {Zhang, Yuxin and Du, Yuxuan and Luo, Gen and Zhong, Yunshan and Zhang, Zhenyu and Liu, Shiwei and Ji, Rongrong},
+  booktitle = {Proceedings of the International Conference on Machine Learning (ICML)},
+  year      = {2024}
+}
+
+@inproceedings{wan2025d2o,
+  title     = {{D2O}: Dynamic Discriminative Operations for Efficient Long-Context Inference of Large Language Models},
+  author    = {Wan, Zhongwei and Wu, Xinjian and Zhang, Yu and Xin, Yi and Tao, Chaofan and Zhu, Zhihong and Wang, Xin and Luo, Siqi and Xiong, Jing and Zhang, Mi},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2406.13035},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@article{wang2024kvmerger,
+  title   = {Model Tells You Where to Merge: Adaptive {KV} Cache Merging for {LLM}s on Long-Context Tasks},
+  author  = {Wang, Zheng and Jin, Boxiao and Yu, Zhongzhi and Zhang, Minjia},
+  journal = {arXiv preprint arXiv:2407.08454},
+  eprint  = {2407.08454},
+  archivePrefix = {arXiv},
+  year    = {2024}
+}
+
+% ---------------------------------------------------------------------------
+% Family 6 — quantization (composable axis, out of scope for evaluation)
+% ---------------------------------------------------------------------------
+@inproceedings{liu2024kivi,
+  title     = {{KIVI}: A Tuning-Free Asymmetric 2bit Quantization for {KV} Cache},
+  author    = {Liu, Zirui and Yuan, Jiayi and Jin, Hongye and Zhong, Shaochen and Xu, Zhaozhuo and Braverman, Vladimir and Chen, Beidi and Hu, Xia},
+  booktitle = {Proceedings of the International Conference on Machine Learning (ICML)},
+  eprint    = {2402.02750},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{hooper2024kvquant,
+  title     = {{KVQuant}: Towards 10 Million Context Length {LLM} Inference with {KV} Cache Quantization},
+  author    = {Hooper, Coleman and Kim, Sehoon and Mohammadzadeh, Hiva and Mahoney, Michael W. and Shao, Yakun Sophia and Keutzer, Kurt and Gholami, Amir},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2401.18079},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@article{zhang2024tokenprecision,
+  title   = {More Tokens, Lower Precision: Towards the Optimal Token-Precision Trade-off in {KV} Cache Compression},
+  author  = {Zhang, Jiebin and Zhu, Dawei and Song, Yifan and Wu, Wenhao and Kuang, Chuqiao and Li, Xiaoguang and Shang, Lifeng and Liu, Qun and Li, Sujian},
+  journal = {arXiv preprint arXiv:2412.12706},
+  eprint  = {2412.12706},
+  archivePrefix = {arXiv},
+  year    = {2024}
+}
+
+% ---------------------------------------------------------------------------
+% Family 7 — retrieval / offloading
+% ---------------------------------------------------------------------------
+@inproceedings{tang2024quest,
+  title     = {{Quest}: Query-Aware Sparsity for Efficient Long-Context {LLM} Inference},
+  author    = {Tang, Jiaming and Zhao, Yilong and Zhu, Kan and Xiao, Guangxuan and Kasikci, Baris and Han, Song},
+  booktitle = {Proceedings of the International Conference on Machine Learning (ICML)},
+  eprint    = {2406.10774},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{xiao2024infllm,
+  title     = {{InfLLM}: Training-Free Long-Context Extrapolation for {LLM}s with an Efficient Context Memory},
+  author    = {Xiao, Chaojun and Zhang, Pengle and Han, Xu and Xiao, Guangxuan and Lin, Yankai and Zhang, Zhengyan and Liu, Zhiyuan and Sun, Maosong},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  eprint    = {2402.04617},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{zhang2025pqcache,
+  title     = {{PQCache}: Product Quantization-based {KVCache} for Long Context {LLM} Inference},
+  author    = {Zhang, Hailin and Ji, Xiaodong and Chen, Yilin and Fu, Fangcheng and Miao, Xupeng and Nie, Xiaonan and Chen, Weipeng and Cui, Bin},
+  booktitle = {Proceedings of the ACM SIGMOD International Conference on Management of Data},
+  eprint    = {2407.12820},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+% ---------------------------------------------------------------------------
+% Family 8 — evaluation, benchmarks, and critique
+% ---------------------------------------------------------------------------
+@inproceedings{yuan2024longctxbench,
+  title     = {{KV} Cache Compression, But What Must We Give in Return? A Comprehensive Benchmark of Long Context Capable Approaches},
+  author    = {Yuan, Jiayi and Liu, Hongyi and Zhong, Shaochen and Chuang, Yu-Neng and Li, Songchen and Wang, Guanchu and Le, Duy and Jin, Hongye and Chaudhary, Vipin and Xu, Zhaozhuo and Liu, Zirui and Hu, Xia},
+  booktitle = {Findings of the Association for Computational Linguistics: EMNLP},
+  eprint    = {2407.01527},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{li2025scbench,
+  title     = {{SCBench}: A {KV} Cache-Centric Analysis of Long-Context Methods},
+  author    = {Li, Yucheng and Jiang, Huiqiang and Wu, Qianhui and Luo, Xufang and Ahn, Surin and Zhang, Chengruidong and Abdi, Amir H. and Li, Dongsheng and Gao, Jianfeng and Yang, Yuqing and Qiu, Lili},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2412.10319},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+@inproceedings{chen2026pitfalls,
+  title     = {The Pitfalls of {KV} Cache Compression},
+  author    = {Chen, Alex and Geh, Renato and Grover, Aditya and Van den Broeck, Guy and Israel, Daniel},
+  booktitle = {Proceedings of the Association for Computational Linguistics (ACL)},
+  eprint    = {2510.00231},
+  archivePrefix = {arXiv},
+  year      = {2026}
+}
+
+@article{gao2025rethinking,
+  title   = {Rethinking Key-Value Cache Compression Techniques for Large Language Model Serving},
+  author  = {Gao, Wei and Zhou, Xinyu and Sun, Peng and Zhang, Tianwei and Wen, Yonggang},
+  journal = {Proceedings of Machine Learning and Systems (MLSys)},
+  eprint  = {2503.24000},
+  archivePrefix = {arXiv},
+  year    = {2025}
+}
+
+@article{agrawal2026benchmarking,
+  title   = {Benchmarking {KV}-Cache Optimizations across Task Quality and System Performance for Long-Context Serving},
+  author  = {Agrawal, Nikita and Mayer, Ruben},
+  journal = {arXiv preprint arXiv:2607.05399},
+  eprint  = {2607.05399},
+  archivePrefix = {arXiv},
+  year    = {2026}
+}
+
+@inproceedings{hsieh2024ruler,
+  title     = {{RULER}: What's the Real Context Size of Your Long-Context Language Models?},
+  author    = {Hsieh, Cheng-Ping and Sun, Simeng and Kriman, Samuel and Acharya, Shantanu and Rekesh, Dima and Jia, Fei and Ginsburg, Boris},
+  booktitle = {Conference on Language Modeling (COLM)},
+  eprint    = {2404.06654},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{bai2024longbench,
+  title     = {{LongBench}: A Bilingual, Multitask Benchmark for Long Context Understanding},
+  author    = {Bai, Yushi and Lv, Xin and Zhang, Jiajie and Lyu, Hongchang and Tang, Jiankai and Huang, Zhidian and Du, Zhengxiao and Liu, Xiao and Zeng, Aohan and Hou, Lei and Dong, Yuxiao and Tang, Jie and Li, Juanzi},
+  booktitle = {Proceedings of the Association for Computational Linguistics (ACL)},
+  eprint    = {2308.14508},
+  archivePrefix = {arXiv},
+  year      = {2024}
+}
+
+@inproceedings{yen2025helmet,
+  title     = {{HELMET}: How to Evaluate Long-Context Language Models Effectively and Thoroughly},
+  author    = {Yen, Howard and Gao, Tianyu and Hou, Minmin and Ding, Ke and Fleischer, Daniel and Izsak, Peter and Wasserblat, Moshe and Chen, Danqi},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  eprint    = {2410.02694},
+  archivePrefix = {arXiv},
+  year      = {2025}
+}
+
+% ---------------------------------------------------------------------------
+% Family 9 — architectural sparsity / latent KV (the moving frontier)
+% ---------------------------------------------------------------------------
+@article{yuan2025nsa,
+  title   = {Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention},
+  author  = {Yuan, Jingyang and Gao, Huazuo and Dai, Damai and Luo, Junyu and Zhao, Liang and Zhang, Zhengyan and Xie, Zhenda and Wei, Y. X. and Wang, Lean and Xiao, Zhiping and Wang, Yuqing and Ruan, Chong and Zhang, Ming and Liang, Wenfeng and Zeng, Wangding},
+  journal = {arXiv preprint arXiv:2502.11089},
+  eprint  = {2502.11089},
+  archivePrefix = {arXiv},
+  year    = {2025}
+}
+
+@article{lu2025moba,
+  title   = {{MoBA}: Mixture of Block Attention for Long-Context {LLM}s},
+  author  = {Lu, Enzhe and Jiang, Zhejun and Liu, Jingyuan and Du, Yulun and Jiang, Tao and Hong, Chao and Liu, Shaowei and He, Weiran and Yuan, Enming and Wang, Yuzhi and others},
+  journal = {arXiv preprint arXiv:2502.13189},
+  eprint  = {2502.13189},
+  archivePrefix = {arXiv},
+  year    = {2025}
+}
+
+@article{deepseek2024v2,
+  title   = {{DeepSeek-V2}: A Strong, Economical, and Efficient Mixture-of-Experts Language Model},
+  author  = {{DeepSeek-AI}},
+  journal = {arXiv preprint arXiv:2405.04434},
+  eprint  = {2405.04434},
+  archivePrefix = {arXiv},
+  year    = {2024}
+}
+
+% ---------------------------------------------------------------------------
+% Tooling
+% ---------------------------------------------------------------------------
+@article{devoto2025expectedattention,
+  title   = {Expected Attention: {KV} Cache Compression by Estimating Attention from Future Queries Distribution},
+  author  = {Devoto, Alessio and Jeblick, Maximilian and Ashkboos, Saleh and others},
+  journal = {arXiv preprint arXiv:2510.00636},
+  eprint  = {2510.00636},
+  archivePrefix = {arXiv},
+  year    = {2025}
+}

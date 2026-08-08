@@ -1,0 +1,193 @@
+% paper.tex — "Bytes, Not Ratios: What KV Cache Compression Benchmarks Actually Measure"
+%
+% Portable skeleton: compiles with a stock `article` class so any machine with a LaTeX
+% toolchain can build it TODAY. Swap \documentclass for the venue style (neurips_2026.sty /
+% iclr2027_conference.sty) before submission — section structure is already venue-agnostic.
+%
+% FIGURE POLICY (enforced): every figure is included via \datafig, which renders the PDF if and
+% only if scripts/ has generated it from results/*.json. Until then it renders a loud placeholder
+% naming the script that must run. `make paper` regenerates figures first, so a real build never
+% ships a placeholder. No figure is ever hand-drawn or filled with illustrative numbers.
+
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{tcolorbox}
+
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black}
+
+% \datafig{filename-without-ext}{width}{caption}{label}
+% Renders figures/<name>.pdf if present; otherwise a loud red box naming the generating script.
+\newcommand{\datafig}[4]{%
+  \begin{figure}[t]
+    \centering
+    \IfFileExists{figures/#1.pdf}{%
+      \includegraphics[width=#2\linewidth]{figures/#1.pdf}%
+    }{%
+      \fbox{\begin{minipage}{#2\linewidth}\centering\vspace{2em}%
+        \textcolor{red}{\textbf{[ MISSING DATA FIGURE: figures/#1.pdf ]}}\\[0.5em]
+        \small run \texttt{scripts/#1.py} on real \texttt{results/} to generate.\\
+        No placeholder numbers are permitted in this slot.\vspace{2em}%
+      \end{minipage}}%
+    }%
+    \caption{#3}
+    \label{#4}
+  \end{figure}%
+}
+
+\title{Bytes, Not Ratios:\\ What KV Cache Compression Benchmarks Actually Measure}
+\author{%
+  Author name(s) withheld\\
+  \texttt{earthespy@gmail.com}%
+}
+\date{Draft --- \today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+KV cache compression methods for long-context LLM inference are compared, almost universally, at a
+matched \emph{token} budget---a ``compression ratio'' that fixes the fraction of cached tokens
+retained---and the result is reported as a memory saving. We show these are not the same quantity,
+and that the gap is method-dependent and sometimes total. Auditing the field's standard toolkit, we
+find that (i)~some widely-benchmarked methods realize head-wise budgets by \emph{masking} rather than
+eviction, so they report large compression ratios while freeing no memory; (ii)~head-level budget
+allocation cannot reduce memory under grouped-query attention even when implemented physically,
+because keys and values are shared within a query group; and (iii)~peak-memory overheads incurred
+during compression are invisible to ratio accounting. We introduce a measurement instrument that
+fixes the budget in \emph{realized bytes} and a wrapper that matches any method to a target byte
+budget, and re-run the standard comparison. % QUANTITATIVE CLAIMS BELOW ARE FILLED FROM results/ — DO NOT hand-edit.
+[Placeholder: report the Kendall-$\tau$ between the token-matched and byte-matched rankings, and the
+number of rank inversions, from Table~\ref{tab:rank} once the pilot sweep completes.]
+Our results are complementary to concurrent work showing rankings are unstable under query
+visibility~\citep{luo2026queryvisibility}: we show they are also unstable under the resource unit the
+field measures them in. Code and all result files are released.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+% The problem: the field budgets in tokens, reports in memory. State the three verified facts as
+% the motivation, then the contributions.
+[Placeholder prose. Motivation: token-fraction budgeting is the de facto standard (KVPress
+\texttt{compression\_ratio}; ratio/count budgets in \citealt{luo2026queryvisibility,
+garcia2026protection, yuan2024longctxbench, li2025scbench}), yet the reported quantity is presented
+as memory. Lead with the AdaKV masking finding (\S\ref{sec:audit}) as the existence proof.]
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item A three-way taxonomy of compression implementations---\emph{memory-faithful},
+  \emph{simulation-only} (masked), and \emph{incommensurable} (off the token axis)---and a
+  measurement instrument that assigns each method to a class by direct byte accounting
+  (\S\ref{sec:method}).
+  \item An audit (\S\ref{sec:audit}) showing the divergence between reported compression ratio and
+  realized bytes across methods on the standard toolkit, including methods that free zero memory,
+  and a first-principles account of why head-level allocation cannot help under GQA.
+  \item A byte-matched re-ranking (\S\ref{sec:rerank}) of the standard method set, quantifying how
+  the ordering changes when the budget is fixed in bytes rather than tokens, with a paired
+  latency-at-matched-bytes measurement.
+\end{enumerate}
+
+\input{related_work}
+
+\section{Method: Byte Accounting for KV Compression}
+\label{sec:method}
+
+\paragraph{Realized bytes.}
+For a cache with per-layer key/value tensors $K^{(\ell)}, V^{(\ell)}$ under method $m$,
+\begin{equation}
+  \mathrm{bytes}(m) \;=\; \underbrace{\sum_{\ell} \big(|K^{(\ell)}| + |V^{(\ell)}|\big)\,s_{\mathrm{dtype}}}_{\text{payload}}
+  \;+\; \underbrace{\mathrm{meta}(m)}_{\text{accumulators, masks, tables}},
+\label{eq:bytes}
+\end{equation}
+where $|\cdot|$ counts elements and $s_{\mathrm{dtype}}$ is bytes per element. Crucially, $|K^{(\ell)}|$
+is measured from the \emph{stored tensor}, not inferred from a nominal token count: a method that masks
+without slicing has full-size $K^{(\ell)}$ and thus full payload regardless of its reported ratio.
+$\mathrm{meta}(m)$ is implemented per method and asserted non-zero wherever the method maintains state.
+
+\paragraph{Sanity control.}
+For full cache, Eq.~\eqref{eq:bytes} must reproduce the analytic
+$2 \cdot n_{\text{layers}} \cdot n_{\text{kv-heads}} \cdot d_{\text{head}} \cdot n_{\text{tokens}} \cdot s_{\mathrm{dtype}}$
+to within allocator granularity. \emph{Positive control:} \texttt{AdaKVPress} must measure at
+$\approx$100\% of full cache at every nominal ratio; if it does not, the instrument---not the
+hypothesis---is wrong.
+
+\paragraph{Byte-matched budgeting.}
+\texttt{ByteBudgetPress} wraps any method and binary-searches its nominal ratio, per
+(method, model, context length), to hit a target realized-byte budget, so that all methods are
+compared at equal bytes rather than equal token fraction.
+
+\section{The Audit: Ratios Are Not Bytes}
+\label{sec:audit}
+
+\datafig{fig1_mispricing}{0.72}{%
+  Nominal compression ratio (x) versus realized KV bytes (y), one line per method, one model, one
+  context length. The dashed diagonal is what the ratio promises. Simulation-only methods appear as
+  flat lines at full-cache bytes; sink/observation-window methods diverge upward by their reserved
+  allocation. Generated from real measurements only.}{fig:mispricing}
+
+\datafig{fig3_decomposition}{0.9}{%
+  Per-method byte decomposition at a fixed nominal ratio: K/V payload, sink tokens, recency window,
+  observation window, metadata, and peak-prefill transient.}{fig:decomp}
+
+[Placeholder analysis. Report, from real runs: which methods land in each taxonomy class; the
+realized-bytes value for AdaKV vs.\ its nominal ratio; the GQA (layer, KV-group) argument instantiated
+with the evaluated model's head configuration.]
+
+\section{Byte-Matched Re-Ranking}
+\label{sec:rerank}
+
+\datafig{fig2_reranking}{0.98}{%
+  The correction. \textbf{Left:} accuracy versus nominal compression ratio (the field's view).
+  \textbf{Right:} accuracy versus realized bytes (corrected). Rank inversions are annotated.}{fig:rerank}
+
+\datafig{fig5_latency}{0.72}{%
+  Accuracy per byte per second at matched bytes: methods that free no bytes also yield no decode
+  speedup, while being ranked as if they saved both.}{fig:latency}
+
+\begin{table}[t]
+  \centering
+  \caption{Kendall $\tau$ between the token-matched and byte-matched method rankings, per budget
+  level (mean $\pm$ s.d. over seeds). $\tau < 1$ is the quantitative form of the re-ranking claim.
+  Filled from \texttt{scripts/table1\_rank.py}; empty until the pilot completes.}
+  \label{tab:rank}
+  \begin{tabular}{lcccc}
+    \toprule
+    Budget (bytes) & B1 & B2 & B3 & B4 \\
+    \midrule
+    Kendall $\tau$ & --- & --- & --- & --- \\
+    \# inversions  & --- & --- & --- & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+[Placeholder analysis of Table~\ref{tab:rank} and Figs.~\ref{fig:rerank}, \ref{fig:latency}.]
+
+\section{Limitations}
+\label{sec:limitations}
+Single toolkit (NVIDIA KVPress) --- the finding is about how the field's standard implementations
+account for memory, not a claim that every method's algorithm is flawed. Masking is a legitimate way
+to study accuracy; the defect is the field's failure to distinguish simulation-faithful from
+memory-faithful implementations. Pilot model/benchmark coverage is intentionally narrow; the extended
+version broadens it. Allocator granularity puts a floor on byte-measurement precision, reported
+explicitly. Concurrent work~\citep{luo2026queryvisibility} covers the query-visibility axis, which we
+do not re-claim.
+
+\section{Conclusion}
+\label{sec:conclusion}
+[Placeholder. Bytes, not ratios: correcting the resource unit changes the comparison, and in the
+limit exposes methods that compress on paper but not in memory.]
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}

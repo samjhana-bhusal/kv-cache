@@ -1,0 +1,92 @@
+% related_work.tex — \input into paper.tex, but written to read standalone.
+% Organized by mechanism family; the argument builds toward Family 4 (adaptive allocation),
+% which is the family a token-fraction budget cannot honestly express.
+
+\section{Related Work}
+\label{sec:related}
+
+KV cache compression for autoregressive inference has grown into a large literature. We group it
+by mechanism, and note for each family how it interacts with the resource unit --- token fraction
+versus realized bytes --- that this paper argues is mis-specified throughout.
+
+\paragraph{Static and heuristic eviction.}
+The earliest training-free methods keep a fixed positional pattern. StreamingLLM~\cite{xiao2024streamingllm}
+retains a few initial ``attention sink'' tokens plus a recent sliding window; LM-Infinite~\cite{han2024lminfinite}
+independently proposes a $\Lambda$-shaped mask of the same form. These methods are memory-faithful
+by construction --- what they keep is exactly what they store --- and, as recent audits find, they
+are a far stronger baseline than the literature has credited~\cite{luo2026queryvisibility,garcia2026protection}.
+
+\paragraph{Attention-score-based eviction.}
+A second family scores tokens by accumulated attention and evicts the low-scoring ones. H2O~\cite{zhang2023h2o}
+retains ``heavy hitters''; Scissorhands~\cite{liu2023scissorhands} exploits the persistence of
+importance across steps; TOVA~\cite{oren2024tova} drops the token least attended by the most recent
+query; FastGen~\cite{ge2024fastgen} profiles each head and applies a per-head policy; Keyformer~\cite{adnan2024keyformer}
+de-biases the discarded-token distribution with a Gumbel-softmax score. A recurring critique is that
+attention score is an incomplete importance signal --- value-vector norms matter too --- and that
+these methods require the materialized attention matrix, making them incompatible with
+FlashAttention~\cite{park2025keydiff}.
+
+\paragraph{Query-aware / observation-window selection.}
+SnapKV~\cite{li2024snapkv} introduced the dominant modern idea: pool attention from a short
+\emph{observation window at the end of the prompt} to decide which prefix tokens to keep.
+PyramidKV~\cite{cai2024pyramidkv} and PyramidInfer~\cite{zhang2024pyramidinfer} add a layer-wise
+budget on top. The observation window is precisely the mechanism that concurrent audits identify as
+confounded: because long-context benchmarks place the question last, the window overlaps the query,
+and the method's apparent skill partly measures query--content overlap rather than intrinsic token
+importance~\cite{luo2026queryvisibility}. Follow-up work treats the window as a defect to be fixed
+(Judge~Q trains soft query tokens~\cite{liu2025judgeq}), reformulates selection to be query-agnostic
+(KVzip~\cite{jang2025kvzip}), or removes the query from the score entirely (KeyDiff~\cite{park2025keydiff}).
+
+\paragraph{Adaptive head- and layer-level budget allocation.}
+This family is central to our argument. Rather than a uniform per-head budget, Ada-KV~\cite{feng2025adakv}
+reallocates a global budget across heads by an $L_1$ eviction-loss bound; CAKE~\cite{qin2025cake}
+allocates across layers by an attention-dispersion preference; HeadKV~\cite{fu2025headkv} scores
+heads by retrieval-and-reasoning ability; RazorAttention~\cite{tang2025razorattention} and
+DuoAttention~\cite{xiao2025duoattention} keep full cache only for identified retrieval/streaming
+heads. Two facts make this family impossible to price in token fractions. First, under grouped-query
+attention the unit of KV memory is the (layer, KV-group) cell, not the head: query heads in a group
+share K and V, so \emph{head-level} budget concentration frees no memory unless the storage layout is
+made ragged, which requires paged KV management~\cite{rehg2024kvcompress}. Second, some widely-used
+implementations realize head-wise budgets by \emph{masking} rather than eviction --- the K/V tensors
+are never shrunk --- so the reported compression ratio and the realized byte savings diverge
+completely. We quantify both effects in \S\ref{sec:audit}.
+
+\paragraph{Merging rather than eviction.}
+CaM~\cite{zhang2024cam} merges to-be-evicted value caches into survivors; D2O~\cite{wan2025d2o}
+adds cosine-similarity-weighted token merging under a per-layer dynamic budget; KVMerger~\cite{wang2024kvmerger}
+clusters merge candidates by key similarity. Merging changes what a ``retained token'' means and
+further loosens the token-count-to-bytes correspondence.
+
+\paragraph{Quantization: a composable, orthogonal axis.}
+KV quantization (KIVI~\cite{liu2024kivi}, KVQuant~\cite{hooper2024kvquant}) reduces bytes-per-element
+rather than token count, and composes with eviction rather than competing with it. We do not evaluate
+quantization, but it is the clearest evidence for our thesis: once precision varies, only a
+\emph{byte} budget is well defined, and indeed the work nearest to ours in spirit trades token count
+against bits-per-token and is forced to reason about memory rather than token fraction~\cite{zhang2024tokenprecision}.
+
+\paragraph{Retrieval and offloading.}
+Quest~\cite{tang2024quest}, InfLLM~\cite{xiao2024infllm}, and PQCache~\cite{zhang2025pqcache} never
+permanently discard KV; they page or retrieve it, trading GPU bytes for latency and host memory.
+These change the resource being budgeted and are out of our eviction-only scope, but they underline
+that ``compression ratio'' means different things across families.
+
+\paragraph{Evaluation and critique.}
+The benchmark side is where this paper lives. longctx\_bench~\cite{yuan2024longctxbench} and
+SCBench~\cite{li2025scbench} compare methods across families under compression \emph{ratios};
+\citet{gao2025rethinking} and \citet{agrawal2026benchmarking} argue that ``compression ratio alone is
+a poor predictor of end-to-end performance,'' and \citet{chen2026pitfalls} show that compression
+damages some prompt content far more than aggregate scores reveal. Most directly,
+\citet{luo2026queryvisibility} run a matched-\emph{token} audit and find that rankings invert under
+query visibility, with SnapKV losing to a start-plus-window baseline. Our work is complementary and
+concurrent: we hold their finding fixed and ask a different question --- whether the rankings are also
+unstable under the \emph{resource unit}, correcting token fractions to realized bytes --- and we
+localize a mechanism (masking-vs-eviction, GQA head sharing) inside the field's standard tooling.
+Evaluation uses RULER~\cite{hsieh2024ruler}, LongBench~\cite{bai2024longbench}, and where possible
+HELMET~\cite{yen2025helmet}.
+
+\paragraph{The moving frontier.}
+Finally, architectural methods increasingly make post-hoc eviction partly moot: native sparse
+attention~\cite{yuan2025nsa}, mixture-of-block attention~\cite{lu2025moba}, and multi-head latent
+attention~\cite{deepseek2024v2} learn or restructure sparsity rather than imposing it at inference.
+These change \emph{what a KV byte is}, which is exactly why a byte-denominated evaluation protocol,
+rather than a token-denominated one, is the durable way to compare across the field's future.
