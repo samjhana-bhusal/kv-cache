@@ -35,13 +35,27 @@ def cell_id(model: str, ctx: int, press: str, ratio: float) -> str:
     return f"{safe_model}__ctx{ctx}__{press}__r{ratio:.3f}"
 
 
-def full_cache_baseline(model, tokenizer, input_ids, device) -> kb.ByteReport:
+def clear_press_state(modules) -> None:
+    """Drop any masked_key_indices a previous press left on attention modules.
+
+    Simulation-only presses (AdaKV, etc.) stash mask index tensors on the module; if left in place,
+    a later forward can apply a stale mask whose dimensions no longer match the cache — a source of
+    out-of-bounds gathers (and CUDA launch failures on GPU). Reset before every forward.
+    """
+    for mod in modules:
+        if getattr(mod, "masked_key_indices", None) is not None:
+            mod.masked_key_indices = None
+
+
+def full_cache_baseline(model, input_ids, modules, device) -> kb.ByteReport:
+    clear_press_state(modules)
     with torch.no_grad():
         out = model(input_ids, use_cache=True)
+    kvdev.synchronize(device)
     return kb.measure(out.past_key_values)
 
 
-def run_cell(model, tokenizer, modules, input_ids, ctx, press_name, ratio, device) -> dict:
+def run_cell(model, modules, input_ids, ctx, press_name, ratio, full, device) -> dict:
     spec = REGISTRY[press_name]
     press = build_press(press_name, ratio)
     if hasattr(press, "post_init_from_model"):
@@ -50,6 +64,7 @@ def run_cell(model, tokenizer, modules, input_ids, ctx, press_name, ratio, devic
         except Exception:  # noqa: BLE001 — some presses init lazily via the hook
             pass
 
+    clear_press_state(modules)
     kvdev.empty_cache(device)
     kvdev.synchronize(device)
     with torch.no_grad(), press(model):
@@ -57,7 +72,6 @@ def run_cell(model, tokenizer, modules, input_ids, ctx, press_name, ratio, devic
     kvdev.synchronize(device)
 
     rep = kb.measure(out.past_key_values, module_list=modules)
-    full = full_cache_baseline(model, tokenizer, input_ids, device)
     measured_class = classify_measured(full.total_bytes, rep.total_bytes)
 
     return {
@@ -118,10 +132,13 @@ def main() -> int:
         model = kvdev.load_model(model_name, dtype, attn_impl, device, device_map)
         in_dev = kvdev.input_device(model, device)
 
+        modules = kb.collect_attention_modules(model)
         for ctx in cfg["context_lengths"]:
+            input_ids = make_context(tokenizer, ctx, in_dev)
+            # Full-cache baseline once per context (identical across methods) — halves the number
+            # of forwards vs computing it per cell, and runs with clean (unmasked) module state.
+            full = full_cache_baseline(model, input_ids, modules, device)
             for press_name in cfg["methods"]:
-                modules = kb.collect_attention_modules(model)
-                input_ids = make_context(tokenizer, ctx, in_dev)
                 for ratio in cfg["ratios"]:
                     cid = cell_id(model_name, ctx, press_name, ratio)
                     path = os.path.join(args.results, cid + ".json")
@@ -129,7 +146,7 @@ def main() -> int:
                         print(f"  skip {cid}")
                         continue
                     try:
-                        rec = run_cell(model, tokenizer, modules, input_ids, ctx, press_name, ratio, device)
+                        rec = run_cell(model, modules, input_ids, ctx, press_name, ratio, full, device)
                         with open(path, "w") as f:
                             json.dump(rec, f, indent=2)
                         frac = rec["realized_fraction"]
