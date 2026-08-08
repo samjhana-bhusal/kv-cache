@@ -58,6 +58,8 @@ def main() -> None:
     cells = [c for c in load_cells(args.results) if c.get("kind") == "accuracy" and not c.get("failed")]
     if not cells:
         sys.exit("[table1] no accuracy cells — run kvbench.eval first.")
+    if any(c.get("task") == "ruler" for c in cells):
+        cells = [c for c in cells if c.get("task") == "ruler"]
 
     ctx = max(c["context_len"] for c in cells)
     cells = [c for c in cells if c["context_len"] == ctx]

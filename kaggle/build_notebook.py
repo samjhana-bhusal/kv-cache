@@ -24,6 +24,7 @@ MODULES = [
     "src/kvbench/tasks.py",
     "src/kvbench/run.py",
     "src/kvbench/eval.py",
+    "src/kvbench/ruler.py",
     "src/kvbench/selftest.py",
     "scripts/_figlib.py",
     "scripts/fig1_mispricing.py",
@@ -32,6 +33,7 @@ MODULES = [
     "scripts/fig5_latency.py",
     "scripts/table1_rank.py",
     "configs/kaggle.yaml",
+    "configs/kaggle_ruler.yaml",
 ]
 
 
@@ -132,6 +134,18 @@ def build() -> dict:
     cells.append(code_cell(
         "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.eval "
         "--config configs/kaggle.yaml --results results --device cuda\n"
+    ))
+
+    cells.append(md_cell(
+        "## 6b. (Optional but recommended) RULER — the credible benchmark\n"
+        "Re-runs the accuracy re-ranking on real **RULER** (`simonjegou/ruler`) with RULER's official\n"
+        "metric, removing the recency-bias caveat of the synthetic needle task. Downloads the RULER\n"
+        "dataset (a few GB) on first use; skip this cell if you only want the byte-audit + synthetic\n"
+        "accuracy. RULER cells (`rul__*`) automatically supersede the synthetic ones in the figures."
+    ))
+    cells.append(code_cell(
+        "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.eval "
+        "--config configs/kaggle_ruler.yaml --results results --device cuda\n"
     ))
 
     cells.append(md_cell("## 7. Generate figures + table from the real results"))

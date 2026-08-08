@@ -20,6 +20,10 @@ def main() -> None:
     cells = [c for c in load_cells(args.results) if c.get("kind") == "accuracy" and not c.get("failed")]
     if not cells:
         sys.exit("[fig2] no accuracy cells (results/acc__*.json) — run kvbench.eval first.")
+    # Prefer RULER (standard benchmark) over synthetic NIAH when both are present.
+    if any(c.get("task") == "ruler" for c in cells):
+        cells = [c for c in cells if c.get("task") == "ruler"]
+        print("[fig2] using RULER cells")
 
     import matplotlib
 

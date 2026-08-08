@@ -29,6 +29,7 @@ from kvbench.presses import (
 )
 from kvbench.run import EAGER_METHODS
 from kvbench.tasks import make_needle, score
+from kvbench import ruler as ruler_task
 
 
 def measure_fraction_fn(model, tokenizer, modules, context, device):
@@ -63,7 +64,16 @@ class _Box:
 method_name = _Box()
 
 
-def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items) -> float:
+def _pred_text(out) -> str:
+    if isinstance(out, dict):
+        if isinstance(out.get("answers"), list) and out["answers"]:
+            return str(out["answers"][0])
+        if "answer" in out:
+            return str(out["answer"])
+    return str(out)
+
+
+def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, ruler_items=None) -> float:
     press = build_press(meth, ratio)
     if hasattr(press, "post_init_from_model"):
         try:
@@ -71,13 +81,19 @@ def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items) -> float:
         except Exception:  # noqa: BLE001
             pass
     hits, n = 0.0, 0
-    for seed in range(n_items):
-        depth = (seed + 1) / (n_items + 1)
-        item = make_needle(tokenizer, ctx, seed=seed, depth=depth)
-        out = pipe(item.context, question=item.question, press=press, max_new_tokens=16)
-        pred = out["answers"][0] if isinstance(out.get("answers"), list) else str(out)
-        hits += score(pred, item.answer)
-        n += 1
+    if task == "ruler":
+        for item in ruler_items:
+            out = pipe(item.context, question=item.question, answer_prefix=item.answer_prefix,
+                       press=press, max_new_tokens=item.max_new_tokens)
+            hits += ruler_task.score_item(_pred_text(out), item)
+            n += 1
+    else:  # synthetic needle-in-a-haystack
+        for seed in range(n_items):
+            depth = (seed + 1) / (n_items + 1)
+            item = make_needle(tokenizer, ctx, seed=seed, depth=depth)
+            out = pipe(item.context, question=item.question, press=press, max_new_tokens=16)
+            hits += score(_pred_text(out), item.answer)
+            n += 1
     return hits / n if n else 0.0
 
 
@@ -93,23 +109,29 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
 
     pipe = KVPressTextGenerationPipeline(model=model, tokenizer=tokenizer)
     n_items = cfg.get("n_items", 5)
+    task = cfg.get("task", "niah")
+    tag = "rul" if task == "ruler" else "acc"
 
     for ctx in cfg["context_lengths"]:
-        calib = make_needle(tokenizer, ctx, seed=999, depth=0.5).context
+        # RULER items for this context length (loaded once, reused across method/ratio cells).
+        ruler_items = ruler_task.load_ruler(ctx, n_items) if task == "ruler" else None
+        # Calibration context: for RULER use a real item's context (right token distribution).
+        calib = ruler_items[0].context if task == "ruler" else make_needle(tokenizer, ctx, seed=999, depth=0.5).context
         for meth in cfg["methods"]:
             method_name.value = meth
             frac_fn, full_bytes = measure_fraction_fn(model, tokenizer, modules, calib, device)
             for ratio in cfg["nominal_ratios"]:
-                cid = f"acc__{model_name.replace('/', '_')}__ctx{ctx}__{meth}__r{ratio:.2f}"
+                cid = f"{tag}__{model_name.replace('/', '_')}__ctx{ctx}__{meth}__r{ratio:.2f}"
                 path = os.path.join(results_dir, cid + ".json")
                 if os.path.exists(path):
                     print(f"  skip {cid}")
                     continue
                 try:
                     realized_frac = frac_fn(ratio)
-                    acc = _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items)
+                    acc = _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, ruler_items)
                     rec = {
-                        "cell": cid, "kind": "accuracy", "method": meth, "model": model_name,
+                        "cell": cid, "kind": "accuracy", "task": task,
+                        "method": meth, "model": model_name,
                         "context_len": ctx, "nominal_ratio": ratio,
                         "realized_fraction": realized_frac,
                         "realized_bytes": int(realized_frac * full_bytes),

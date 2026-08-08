@@ -1,0 +1,34 @@
+# RULER accuracy sweep — the credible-benchmark version of Phase 3, for Kaggle GPU.
+# Same byte-matched re-ranking loop as kaggle.yaml, but the task is real RULER (simonjegou/ruler)
+# with RULER's official substring metric — removes the recency-bias caveat of the synthetic NIAH.
+#
+# RULER configs are keyed by context length; 4096 and 8192 are standard. n_items rows are sampled
+# across all 13 RULER tasks per (method, ratio) cell.
+
+task: ruler
+
+models:
+  - Qwen/Qwen2.5-3B-Instruct
+  # - Qwen/Qwen2.5-7B-Instruct   # add with device_map: auto
+
+# device_map: auto
+
+context_lengths:
+  - 4096
+  - 8192
+
+nominal_ratios:
+  - 0.10
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+methods:
+  - random
+  - streaming_llm
+  - snapkv
+  - adakv
+  - think
+
+n_items: 50   # RULER rows per cell, sampled across all 13 tasks
