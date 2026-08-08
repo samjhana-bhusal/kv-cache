@@ -65,9 +65,11 @@ allocation cannot reduce memory under grouped-query attention even when implemen
 because keys and values are shared within a query group; and (iii)~peak-memory overheads incurred
 during compression are invisible to ratio accounting. We introduce a measurement instrument that
 fixes the budget in \emph{realized bytes} and a wrapper that matches any method to a target byte
-budget, and re-run the standard comparison. % QUANTITATIVE CLAIMS BELOW ARE FILLED FROM results/ — DO NOT hand-edit.
-[Placeholder: report the Kendall-$\tau$ between the token-matched and byte-matched rankings, and the
-number of rank inversions, from Table~\ref{tab:rank} once the pilot sweep completes.]
+budget, and re-run the standard comparison. In a pilot audit on the standard toolkit, a widely-cited
+adaptive method advertised at a $10\%$ token budget is measured to occupy $108\%$ of the full cache,
+while ``trivial'' methods hit their nominal budget exactly---so the reported ratio and the realized
+memory are not merely mismatched but, for masking-based methods, uncorrelated.
+% Byte figures above are measured (results/*.json, Qwen2.5-0.5B pilot); re-ranking numbers TBD.
 Our results are complementary to concurrent work showing rankings are unstable under query
 visibility~\citep{luo2026queryvisibility}: we show they are also unstable under the resource unit the
 field measures them in. Code and all result files are released.
@@ -139,9 +141,20 @@ compared at equal bytes rather than equal token fraction.
   Per-method byte decomposition at a fixed nominal ratio: K/V payload, sink tokens, recency window,
   observation window, metadata, and peak-prefill transient.}{fig:decomp}
 
-[Placeholder analysis. Report, from real runs: which methods land in each taxonomy class; the
-realized-bytes value for AdaKV vs.\ its nominal ratio; the GQA (layer, KV-group) argument instantiated
-with the evaluated model's head configuration.]
+\paragraph{Pilot measurement.}
+On Qwen2.5-0.5B-Instruct (GQA, 2 KV heads) at 2048-token context, the audit cleanly separates the
+three classes (Fig.~\ref{fig:mispricing}). The four memory-faithful methods---random, StreamingLLM,
+SnapKV, and observed-attention (an H2O surrogate)---realize exactly their nominal fraction
+($0.75/0.50/0.25/0.10$ of full cache), lying on the diagonal. AdaKV, which realizes its head-wise
+budget by masking rather than eviction, keeps full-size tensors at every ratio; its realized memory
+is $102$--$108\%$ of the full cache and \emph{rises} with the nominal compression ratio, because the
+mask-index bookkeeping it stores grows as it nominally prunes more. ThinK, which prunes key channels,
+does not shrink the stored tensor either and measures at $100\%$. We also record that observed-attention
+cannot run under SDPA/FlashAttention and requires eager attention---so the one score-accumulating
+method in the set forgoes fast attention kernels, a systems cost invisible to any token budget. The
+GQA point is first-principles: with $2$ shared KV heads, a head-level budget cannot reduce the
+(layer, KV-group) storage unit regardless of implementation. [Extended run: repeat on an 8B model and
+report peak-prefill transients.]
 
 \section{Byte-Matched Re-Ranking}
 \label{sec:rerank}
