@@ -1,0 +1,35 @@
+# Phase-3 accuracy sweep — the REAL run, for the Ubuntu/CUDA box (8B won't fit in 16 GB locally).
+#
+#   source .venv/bin/activate
+#   PYTHONPATH=src python -m kvbench.eval --config configs/main.yaml --device cuda
+#
+# On CUDA, add a 7-8B model for the confirmation grid. Llama-3.1-8B is gated: accept the license on
+# HuggingFace and `huggingface-cli login` first, or swap for an open model (Qwen2.5-7B).
+
+models:
+  - Qwen/Qwen2.5-3B-Instruct
+  - Qwen/Qwen2.5-7B-Instruct
+  # - meta-llama/Llama-3.1-8B-Instruct   # gated; uncomment after accepting the HF license
+
+context_lengths:
+  - 2048
+  - 4096
+  - 8192
+
+# The field's knob. Each cell records accuracy AND realized bytes; the analysis contrasts the two.
+nominal_ratios:
+  - 0.10
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+methods:
+  - random
+  - streaming_llm
+  - snapkv
+  - observed_attention   # ~H2O; forces eager attention (recorded)
+  - adakv                # simulation-only: infeasible below full cache — reported as a finding
+  - think                # incommensurable
+
+n_items: 25   # accuracy averaged over 25 needle placements per cell

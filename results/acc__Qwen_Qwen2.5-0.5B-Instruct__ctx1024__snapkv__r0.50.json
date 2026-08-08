@@ -1,0 +1,17 @@
+{
+  "cell": "acc__Qwen_Qwen2.5-0.5B-Instruct__ctx1024__snapkv__r0.50",
+  "kind": "accuracy",
+  "method": "snapkv",
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "context_len": 1024,
+  "nominal_ratio": 0.5,
+  "realized_fraction": 0.4994192799070848,
+  "realized_bytes": 5283840,
+  "full_cache_bytes": 10579968,
+  "accuracy": 0.0,
+  "n_items": 3,
+  "query_aware": true,
+  "taxonomy_prior": "memory-faithful",
+  "device": "mps",
+  "timestamp": 1786171572.1827772
+}

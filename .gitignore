@@ -8,7 +8,8 @@
 *.fdb_latexmk
 *.synctex.gz
 *.toc
-reports/figures/*.pdf   # generated from results/ by scripts/ — regenerate, don't commit
+# NOTE: reports/figures/ IS tracked — the paper is compiled on Overleaf, which needs the figures
+# present. They regenerate from results/ via `make figures`; commit the regenerated versions.
 
 # Python
 __pycache__/

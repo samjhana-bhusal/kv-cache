@@ -82,3 +82,37 @@ def classify_measured(full_cache_bytes: int, realized_bytes: int, tol: float = 0
     if frac >= 1.0 - tol:
         return SIMULATION_ONLY
     return MEMORY_FAITHFUL  # incommensurable is decided by construction (ThinK), not by this test
+
+
+def calibrate_ratio_for_byte_fraction(
+    measure_fn, target_fraction: float, tol: float = 0.01, max_iter: int = 12
+) -> tuple[float | None, float]:
+    """Find the nominal compression_ratio whose realized byte fraction hits `target_fraction`.
+
+    `measure_fn(ratio) -> realized_fraction` runs a prefill and measures realized/full bytes.
+    Returns (ratio, achieved_fraction). ratio is None if the target is INFEASIBLE — i.e. even the
+    most aggressive ratio cannot get realized bytes down to the target (the signature of a
+    simulation-only method, which cannot be byte-matched below full cache). We report that as a
+    finding rather than silently substituting the closest ratio (SRS NFR4: honest failure).
+
+    Assumes realized_fraction is monotone non-increasing in ratio (true for memory-faithful presses;
+    for masking presses the fraction stays ~1 and the infeasibility branch fires).
+    """
+    lo, hi = 0.0, 0.99
+    f_hi = measure_fn(hi)  # most aggressive
+    if f_hi > target_fraction + tol:
+        return None, f_hi  # cannot reach target even at max compression -> infeasible
+    f_lo = measure_fn(lo)
+    if f_lo <= target_fraction:  # full cache already at/under target (target ~1.0)
+        return lo, f_lo
+    best = hi
+    for _ in range(max_iter):
+        mid = 0.5 * (lo + hi)
+        f = measure_fn(mid)
+        if abs(f - target_fraction) <= tol:
+            return mid, f
+        if f > target_fraction:  # not compressed enough
+            lo = mid
+        else:
+            hi, best = mid, mid
+    return best, measure_fn(best)

@@ -1,0 +1,17 @@
+{
+  "cell": "acc__Qwen_Qwen2.5-0.5B-Instruct__ctx1024__streaming_llm__r0.75",
+  "kind": "accuracy",
+  "method": "streaming_llm",
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "context_len": 1024,
+  "nominal_ratio": 0.75,
+  "realized_fraction": 0.2497096399535424,
+  "realized_bytes": 2641920,
+  "full_cache_bytes": 10579968,
+  "accuracy": 0.3333333333333333,
+  "n_items": 3,
+  "query_aware": false,
+  "taxonomy_prior": "memory-faithful",
+  "device": "mps",
+  "timestamp": 1786171569.627959
+}

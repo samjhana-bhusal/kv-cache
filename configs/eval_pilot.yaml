@@ -1,0 +1,25 @@
+# Phase-3 accuracy SMOKE TEST — proves the harness produces real Fig 2 / Table 1 locally.
+# 0.5B model, tiny grid. Accuracy will be weak (small model); the point is the pipeline, not the
+# numbers. The real sweep is configs/main.yaml, run on the GPU box.
+
+models:
+  - Qwen/Qwen2.5-0.5B-Instruct
+
+context_lengths:
+  - 1024
+
+# The field's knob. Each cell records accuracy AND realized bytes, so the analysis can plot
+# accuracy against nominal ratio (field's view) and against realized bytes (honest view).
+nominal_ratios:
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+methods:
+  - random
+  - streaming_llm
+  - snapkv
+  - adakv          # appears at realized~1.0 on the byte axis regardless of ratio — exposed
+
+n_items: 3

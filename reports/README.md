@@ -38,9 +38,12 @@ intentions.
 
 - [x] Related Work written from verified citations (Phase 0/5).
 - [x] Figure pipeline wired and fail-loud (`scripts/fig*.py`, `_figlib.py`).
-- [ ] `results/` populated — needs the harness (`src/kvbench/`) and a compute environment.
-- [ ] Figures generated; placeholders replaced.
-- [ ] Quantitative claims filled.
+- [x] `results/` populated by the Phase-2 audit + Phase-3 smoke test (Qwen2.5-0.5B, MPS).
+- [x] Fig 1 (byte audit) and Fig 2 + Table 1 (re-ranking) render **real** data.
+- [~] Quantitative claims: audit numbers filled; accuracy re-ranking is the 0.5B pilot, to be
+      replaced by the 3B/7B run on the GPU box (`configs/main.yaml`, see `../RUN.md`).
+- [ ] Fig 3 (decomposition) and Fig 5 (latency): need byte_decomposition / throughput fields —
+      still show the loud MISSING-DATA box.
 
-See `../notes/prior-art.md` for why the paper is framed around bytes, and the plan file for the
-phase-by-phase schedule.
+See `../notes/prior-art.md` for why the paper is framed around bytes, `../RUN.md` for how to run,
+and the plan file for the phase-by-phase schedule.

@@ -1,0 +1,17 @@
+{
+  "cell": "acc__Qwen_Qwen2.5-0.5B-Instruct__ctx1024__adakv__r0.90",
+  "kind": "accuracy",
+  "method": "adakv",
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "context_len": 1024,
+  "nominal_ratio": 0.9,
+  "realized_fraction": 1.0843858885017421,
+  "realized_bytes": 11472768,
+  "full_cache_bytes": 10579968,
+  "accuracy": 0.0,
+  "n_items": 3,
+  "query_aware": true,
+  "taxonomy_prior": "simulation-only",
+  "device": "mps",
+  "timestamp": 1786171582.9220018
+}
