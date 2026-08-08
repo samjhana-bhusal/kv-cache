@@ -107,26 +107,21 @@ def main() -> int:
 
     dtype = torch.float16 if device.type in ("cuda", "mps") else torch.float32
 
+    device_map = cfg.get("device_map")
     for model_name in cfg["models"]:
-        print(f"loading {model_name} ...")
+        # Load ONE model per model_name. If any method needs eager attention, use eager for all —
+        # holding two sharded models at once under device_map=auto risks a CUDA OOM/launch failure.
+        # Attention impl does not change realized byte measurements, so this is safe for the audit.
+        attn_impl = "eager" if any(m in EAGER_METHODS for m in cfg["methods"]) else "sdpa"
+        print(f"loading {model_name} (attn={attn_impl}, device_map={device_map}) ...")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        models: dict[str, object] = {}  # attn_impl -> model, loaded lazily
-
-        device_map = cfg.get("device_map")
-
-        def get_model(attn_impl: str):
-            if attn_impl not in models:
-                models[attn_impl] = kvdev.load_model(
-                    model_name, dtype, attn_impl, device, device_map
-                )
-            return models[attn_impl]
+        model = kvdev.load_model(model_name, dtype, attn_impl, device, device_map)
+        in_dev = kvdev.input_device(model, device)
 
         for ctx in cfg["context_lengths"]:
             for press_name in cfg["methods"]:
-                attn_impl = "eager" if press_name in EAGER_METHODS else "sdpa"
-                model = get_model(attn_impl)
                 modules = kb.collect_attention_modules(model)
-                input_ids = make_context(tokenizer, ctx, device)
+                input_ids = make_context(tokenizer, ctx, in_dev)
                 for ratio in cfg["ratios"]:
                     cid = cell_id(model_name, ctx, press_name, ratio)
                     path = os.path.join(args.results, cid + ".json")
@@ -145,7 +140,7 @@ def main() -> int:
                             json.dump(fail, f, indent=2)
                         print(f"  {cid}: FAILED {e!r}")
 
-        models.clear()
+        del model
         kvdev.empty_cache(device)
 
     print("done.")

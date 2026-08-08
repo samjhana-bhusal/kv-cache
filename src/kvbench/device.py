@@ -60,6 +60,18 @@ def empty_cache(device: torch.device) -> None:
         torch.mps.empty_cache()
 
 
+def input_device(model, fallback: torch.device) -> torch.device:
+    """Device to place input_ids on. With device_map sharding, use the embedding's device;
+    otherwise the single device the model lives on."""
+    try:
+        emb = model.get_input_embeddings()
+        if emb is not None and hasattr(emb, "weight"):
+            return emb.weight.device
+    except Exception:  # noqa: BLE001
+        pass
+    return fallback
+
+
 def load_model(model_name, dtype, attn_impl, device, device_map=None):
     """Load a causal LM portably across single-device (.to) and multi-GPU (device_map=auto).
 

@@ -33,7 +33,8 @@ from kvbench.tasks import make_needle, score
 
 def measure_fraction_fn(model, tokenizer, modules, context, device):
     """Return f(ratio)->realized_fraction by prefilling `context` under the press at that ratio."""
-    ids = tokenizer(context, return_tensors="pt").input_ids.to(device)
+    in_dev = kvdev.input_device(model, device)
+    ids = tokenizer(context, return_tensors="pt").input_ids.to(in_dev)
     with torch.no_grad():
         full = kb.measure(model(ids, use_cache=True).past_key_values)
 
