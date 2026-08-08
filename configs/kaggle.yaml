@@ -1,14 +1,22 @@
-# Kaggle sweep — GPU (T4x2 / P100). Drives BOTH the byte audit (kvbench.run, uses `ratios`) and the
-# accuracy re-ranking (kvbench.eval, uses `nominal_ratios`). device_map=auto shards 7B across T4x2.
+# Kaggle sweep — tuned for STABILITY on T4 first, scale second.
 #
-# Qwen models are open (no HF gating). To add Llama-3.1-8B: add it to `models`, attach your HF token
-# via Kaggle Secrets, and huggingface-cli login in the notebook.
+# Drives BOTH the byte audit (kvbench.run, uses `ratios`) and the accuracy re-ranking
+# (kvbench.eval, uses `nominal_ratios`).
+#
+# Defaults chosen to avoid the T4 CUDA-launch-failure seen with eager attention + device_map:
+#   * NO observed_attention  -> no method needs eager -> everything runs on stable SDPA.
+#   * NO device_map          -> 3B lives on a single T4 (6 GB), no fragile cross-GPU sharding.
+# These two lines are the difference between "runs clean" and "cudaErrorLaunchFailure".
+#
+# To scale up AFTER 3B works (each adds instability risk on T4 — add one at a time):
+#   * 7B: uncomment it below AND set `device_map: auto` (7B won't fit one T4).
+#   * H2O baseline: add `observed_attention` to methods (forces eager; may be unstable on T4).
 
 models:
   - Qwen/Qwen2.5-3B-Instruct
-  - Qwen/Qwen2.5-7B-Instruct
+  # - Qwen/Qwen2.5-7B-Instruct   # needs device_map: auto (below)
 
-device_map: auto          # multi-GPU sharding; omit/none for single-GPU .to(device)
+# device_map: auto             # uncomment ONLY when running 7B/8B (multi-GPU sharding)
 
 context_lengths:
   - 2048
@@ -31,8 +39,8 @@ methods:
   - random
   - streaming_llm
   - snapkv
-  - observed_attention
-  - adakv
-  - think
+  - adakv                # simulation-only: the headline (infeasible below full cache)
+  - think                # incommensurable
+  # - observed_attention # H2O surrogate; REQUIRES eager attention -> may crash on T4. Add last.
 
 n_items: 20

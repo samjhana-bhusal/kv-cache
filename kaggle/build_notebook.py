@@ -121,7 +121,8 @@ def build() -> dict:
         "## 5. Phase 2 — byte audit (Fig 1). No accuracy eval; the motivating result."
     ))
     cells.append(code_cell(
-        "!PYTHONPATH=/kaggle/working/src python -m kvbench.run "
+        "# CUDA_LAUNCH_BLOCKING=1 makes any CUDA error report at the real kernel (accurate traceback).\n"
+        "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.run "
         "--config configs/kaggle.yaml --results results --device cuda\n"
     ))
 
@@ -129,7 +130,7 @@ def build() -> dict:
         "## 6. Phase 3 — accuracy re-ranking at matched bytes (Fig 2, Table 1)"
     ))
     cells.append(code_cell(
-        "!PYTHONPATH=/kaggle/working/src python -m kvbench.eval "
+        "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.eval "
         "--config configs/kaggle.yaml --results results --device cuda\n"
     ))
 

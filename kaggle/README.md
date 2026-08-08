@@ -35,6 +35,22 @@ Version. Two ways to reuse it:
 them, so keeping the zip is keeping the paper's evidence. Commit the downloaded `results/` back into
 the repo so `git` tracks the real numbers.
 
+## Stability note (read if you hit `cudaErrorLaunchFailure`)
+
+The default config is tuned to run clean on Kaggle T4:
+
+- **No `observed_attention`** — that method needs *eager* attention, and eager fp16 on T4 (Turing)
+  is where the CUDA launch failures come from. Every default method runs on stable **SDPA**.
+- **No `device_map`** — 3B fits one T4 (6 GB); single-GPU is far more stable than sharding.
+
+Scale up only after 3B completes, one change at a time (each re-introduces some risk):
+
+- **7B:** uncomment it in `models:` *and* set `device_map: auto` (7B needs both T4s).
+- **H2O baseline:** add `observed_attention` to `methods:` (forces eager — add it last).
+
+Note: once a CUDA launch failure occurs, the GPU context is dead and every later cell fails too —
+that cascade is one root fault, not many. Fix the cause (drop eager/sharding), don't retry in place.
+
 ## Adding Llama-3.1-8B (optional, gated)
 
 1. Accept the license at <https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct>.
