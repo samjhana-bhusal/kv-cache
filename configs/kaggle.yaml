@@ -1,0 +1,38 @@
+# Kaggle sweep — GPU (T4x2 / P100). Drives BOTH the byte audit (kvbench.run, uses `ratios`) and the
+# accuracy re-ranking (kvbench.eval, uses `nominal_ratios`). device_map=auto shards 7B across T4x2.
+#
+# Qwen models are open (no HF gating). To add Llama-3.1-8B: add it to `models`, attach your HF token
+# via Kaggle Secrets, and huggingface-cli login in the notebook.
+
+models:
+  - Qwen/Qwen2.5-3B-Instruct
+  - Qwen/Qwen2.5-7B-Instruct
+
+device_map: auto          # multi-GPU sharding; omit/none for single-GPU .to(device)
+
+context_lengths:
+  - 2048
+  - 4096
+
+ratios:                   # byte-audit knob (kvbench.run)
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+nominal_ratios:           # accuracy sweep knob (kvbench.eval)
+  - 0.10
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+methods:
+  - random
+  - streaming_llm
+  - snapkv
+  - observed_attention
+  - adakv
+  - think
+
+n_items: 20

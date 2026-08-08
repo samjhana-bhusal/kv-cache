@@ -112,12 +112,13 @@ def main() -> int:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         models: dict[str, object] = {}  # attn_impl -> model, loaded lazily
 
+        device_map = cfg.get("device_map")
+
         def get_model(attn_impl: str):
             if attn_impl not in models:
-                m = AutoModelForCausalLM.from_pretrained(
-                    model_name, torch_dtype=dtype, attn_implementation=attn_impl
-                ).to(device).eval()
-                models[attn_impl] = m
+                models[attn_impl] = kvdev.load_model(
+                    model_name, dtype, attn_impl, device, device_map
+                )
             return models[attn_impl]
 
         for ctx in cfg["context_lengths"]:

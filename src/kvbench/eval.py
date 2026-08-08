@@ -140,16 +140,13 @@ def main() -> int:
     dtype = torch.float16 if device.type in ("cuda", "mps") else torch.float32
     print(f"device: {device}")
 
+    device_map = cfg.get("device_map")  # e.g. "auto" for Kaggle T4x2 / multi-GPU
     for model_name in cfg["models"]:
         needs_eager = any(m in EAGER_METHODS for m in cfg["methods"])
         attn = "eager" if needs_eager else "sdpa"
-        print(f"loading {model_name} (attn={attn}) ...")
+        print(f"loading {model_name} (attn={attn}, device_map={device_map}) ...")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = (
-            AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype, attn_implementation=attn)
-            .to(device)
-            .eval()
-        )
+        model = kvdev.load_model(model_name, dtype, attn, device, device_map)
         modules = kb.collect_attention_modules(model)
         run(model, tokenizer, modules, cfg, model_name, device, args.results)
         del model

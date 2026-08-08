@@ -58,3 +58,18 @@ def empty_cache(device: torch.device) -> None:
         torch.cuda.empty_cache()
     elif device.type == "mps":
         torch.mps.empty_cache()
+
+
+def load_model(model_name, dtype, attn_impl, device, device_map=None):
+    """Load a causal LM portably across single-device (.to) and multi-GPU (device_map=auto).
+
+    Uses `dtype=` (not the deprecated `torch_dtype=`). When device_map is set (e.g. "auto" on a
+    Kaggle T4x2), transformers shards the model across GPUs and we do NOT call .to(device).
+    """
+    from transformers import AutoModelForCausalLM
+
+    kwargs = dict(dtype=dtype, attn_implementation=attn_impl)
+    if device_map:
+        model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device_map, **kwargs)
+        return model.eval()
+    return AutoModelForCausalLM.from_pretrained(model_name, **kwargs).to(device).eval()
