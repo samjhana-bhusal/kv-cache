@@ -1,0 +1,17 @@
+{
+  "cell": "acc__Qwen_Qwen2.5-3B-Instruct__ctx2048__adakv__r0.25",
+  "kind": "accuracy",
+  "method": "adakv",
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "context_len": 2048,
+  "nominal_ratio": 0.25,
+  "realized_fraction": 1.01171875,
+  "realized_bytes": 61911360,
+  "full_cache_bytes": 61194240,
+  "accuracy": 0.0,
+  "n_items": 20,
+  "query_aware": true,
+  "taxonomy_prior": "simulation-only",
+  "device": "cuda",
+  "timestamp": 1786205039.6853251
+}

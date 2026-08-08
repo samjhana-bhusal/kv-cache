@@ -1,0 +1,17 @@
+{
+  "cell": "acc__Qwen_Qwen2.5-3B-Instruct__ctx4096__snapkv__r0.50",
+  "kind": "accuracy",
+  "method": "snapkv",
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "context_len": 4096,
+  "nominal_ratio": 0.5,
+  "realized_fraction": 0.5,
+  "realized_bytes": 60051456,
+  "full_cache_bytes": 120102912,
+  "accuracy": 0.2,
+  "n_items": 20,
+  "query_aware": true,
+  "taxonomy_prior": "memory-faithful",
+  "device": "cuda",
+  "timestamp": 1786206477.4153929
+}

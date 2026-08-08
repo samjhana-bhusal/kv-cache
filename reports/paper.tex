@@ -65,11 +65,16 @@ allocation cannot reduce memory under grouped-query attention even when implemen
 because keys and values are shared within a query group; and (iii)~peak-memory overheads incurred
 during compression are invisible to ratio accounting. We introduce a measurement instrument that
 fixes the budget in \emph{realized bytes} and a wrapper that matches any method to a target byte
-budget, and re-run the standard comparison. In a pilot audit on the standard toolkit, a widely-cited
-adaptive method advertised at a $10\%$ token budget is measured to occupy $108\%$ of the full cache,
-while ``trivial'' methods hit their nominal budget exactly---so the reported ratio and the realized
-memory are not merely mismatched but, for masking-based methods, uncorrelated.
-% Byte figures above are measured (results/*.json, Qwen2.5-0.5B pilot); re-ranking numbers TBD.
+budget, and re-run the standard comparison. Across Qwen2.5-0.5B and 3B, two of five audited methods
+report large compression ratios while realizing $100$--$108\%$ of full-cache bytes: an adaptive
+head-wise method that masks rather than evicts, and a channel-pruning method whose stored tensors
+never shrink. The consequence for evaluation is stark: at a nominal $50\%$ ``compression'' the
+channel-pruning method attains \emph{full-cache accuracy} and appears to dominate, yet the byte
+correction places it at $100\%$ memory---its advantage was an accounting artifact. Among the methods
+that genuinely compress, a trivial sink-plus-recency window beats the query-aware scorer at every
+matched byte budget.
+% Numbers measured on real runs (results/*.json, Qwen2.5-0.5B + 3B). Accuracy uses a synthetic NIAH
+% with a recency bias (see Limitations); the byte-accounting results are task-independent.
 Our results are complementary to concurrent work showing rankings are unstable under query
 visibility~\citep{luo2026queryvisibility}: we show they are also unstable under the resource unit the
 field measures them in. Code and all result files are released.
@@ -153,34 +158,50 @@ does not shrink the stored tensor either and measures at $100\%$. We also record
 cannot run under SDPA/FlashAttention and requires eager attention---so the one score-accumulating
 method in the set forgoes fast attention kernels, a systems cost invisible to any token budget. The
 GQA point is first-principles: with $2$ shared KV heads, a head-level budget cannot reduce the
-(layer, KV-group) storage unit regardless of implementation. [Extended run: repeat on an 8B model and
-report peak-prefill transients.]
+(layer, KV-group) storage unit regardless of implementation. The same audit on Qwen2.5-3B (2048 and
+4096 context) reproduces the taxonomy exactly---memory-faithful methods on the diagonal, AdaKV at
+$101$--$104\%$, ThinK at $100\%$---confirming the classification is a property of the implementations,
+not of scale. [Extended run: 7--8B and peak-prefill transients.]
 
 \section{Byte-Matched Re-Ranking}
 \label{sec:rerank}
 
 \datafig{fig2_reranking}{0.98}{%
-  The correction. \textbf{Left:} accuracy versus nominal compression ratio (the field's view).
-  \textbf{Right:} accuracy versus realized bytes (corrected). Rank inversions are annotated.}{fig:rerank}
+  The correction, on Qwen2.5-3B at 4096-token context. \textbf{Left:} accuracy versus nominal
+  compression ratio---the field's view. ThinK (channel pruning) attains full accuracy through a
+  nominal $50\%$ ``compression'' and appears to dominate; AdaKV reports compression at every ratio.
+  \textbf{Right:} the same runs against realized bytes. ThinK's and AdaKV's points collapse onto
+  $\ge\!1.0$---they never freed memory---while the methods that genuinely compress spread across the
+  axis, where a trivial sink-plus-recency window (StreamingLLM) dominates the query-aware scorer
+  (SnapKV) at every budget.}{fig:rerank}
+
+On Qwen2.5-3B (Fig.~\ref{fig:rerank}), the correction acts less by reordering the methods that
+compress---among those the ordering StreamingLLM $>$ SnapKV $>$ random is stable across both
+views---than by \emph{removing two of five methods from the comparison entirely}: AdaKV and ThinK
+cannot be matched to any byte budget below full cache, so they are byte-infeasible
+(Table~\ref{tab:rank}). This is the sharper failure. In the field's view ThinK is the strongest
+method shown---full-cache accuracy at half the nominal budget---an apparent result that any token-denominated
+benchmark would report and that vanishes the moment memory is measured. The consequence for the
+literature is not that byte-matching gently permutes a leaderboard, but that a leaderboard can be
+topped by a method that does not compress.
 
 \datafig{fig5_latency}{0.72}{%
   Accuracy per byte per second at matched bytes: methods that free no bytes also yield no decode
-  speedup, while being ranked as if they saved both.}{fig:latency}
+  speedup, while being ranked as if they saved both. [To generate: add decode\_tokens\_per\_s to the
+  eval cells.]}{fig:latency}
 
 \begin{table}[t]
   \centering
-  \caption{Kendall $\tau$ between the ranking at matched nominal ratio and the ranking at the
-  realized byte budget that ratio is assumed to deliver. $\tau < 1$ means correcting the resource
-  unit reorders the methods. Simulation-only methods that cannot reach any byte budget below full
-  cache are reported as byte-infeasible rather than ranked. Auto-generated by
-  \texttt{scripts/table1\_rank.py}; the numbers shown are the 0.5B pilot and are replaced by the
-  extended run.}
+  \caption{Per budget level, the Kendall $\tau$ between the ranking at matched nominal ratio and at
+  the realized byte budget that ratio is assumed to deliver, and the methods that are
+  \emph{byte-infeasible}---unable to reach that byte budget at any nominal ratio. On Qwen2.5-3B,
+  $\tau=1$ among the compressing methods (byte-matching does not reorder them), but AdaKV and ThinK
+  are byte-infeasible at every level: they report compression the byte axis cannot honour.
+  Auto-generated by \texttt{scripts/table1\_rank.py}.}
   \label{tab:rank}
   \IfFileExists{figures/table1_rank.tex}{\input{figures/table1_rank.tex}}{%
     \textcolor{red}{\textbf{[ table1\_rank.tex not generated --- run scripts/table1\_rank.py ]}}}
 \end{table}
-
-[Placeholder analysis of Table~\ref{tab:rank} and Figs.~\ref{fig:rerank}, \ref{fig:latency}.]
 
 \section{Limitations}
 \label{sec:limitations}
@@ -191,6 +212,15 @@ memory-faithful implementations. Pilot model/benchmark coverage is intentionally
 version broadens it. Allocator granularity puts a floor on byte-measurement precision, reported
 explicitly. Concurrent work~\citep{luo2026queryvisibility} covers the query-visibility axis, which we
 do not re-claim.
+
+\paragraph{Accuracy task.} The re-ranking (Fig.~\ref{fig:rerank}) uses a synthetic
+needle-in-a-haystack with the question last. Because the needle is placed at varying depths, a pure
+recency window (StreamingLLM) is advantaged whenever the needle falls in its kept span, which
+partly explains its margin over SnapKV; the direction is consistent with~\citep{luo2026queryvisibility}
+but the magnitude is task-dependent. The \emph{byte-accounting} results (Fig.~\ref{fig:mispricing},
+Table~\ref{tab:rank})---which methods free memory and which do not---are independent of the task, the
+metric, and the model, and are the paper's primary claims. Grounding the accuracy comparison on
+RULER and LongBench (which the harness already supports through kvpress) is the natural extension.
 
 \section{Conclusion}
 \label{sec:conclusion}
