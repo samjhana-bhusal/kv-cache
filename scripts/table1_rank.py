@@ -38,11 +38,13 @@ def kendall_tau(rank_a: list[str], rank_b: list[str]) -> float | None:
     return (conc - disc) / denom if denom else None
 
 
-def interp(pts: list[tuple[float, float]], x: float) -> float | None:
-    """Linear interpolation of accuracy at byte-fraction x; None if x outside the measured range."""
+def interp(pts: list[tuple[float, float]], x: float, eps: float = 1e-3) -> float | None:
+    """Linear interpolation of accuracy at byte-fraction x. None only if x is meaningfully outside
+    the measured range; a small eps absorbs float boundary noise (e.g. realized 0.8999 vs target 0.90)."""
     pts = sorted(pts)
-    if not pts or x < pts[0][0] or x > pts[-1][0]:
+    if not pts or x < pts[0][0] - eps or x > pts[-1][0] + eps:
         return None
+    x = min(max(x, pts[0][0]), pts[-1][0])  # clamp into range after the tolerance check
     for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
         if x0 <= x <= x1:
             if x1 == x0:
