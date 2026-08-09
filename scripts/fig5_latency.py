@@ -9,12 +9,12 @@ from __future__ import annotations
 import sys
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from _figlib import load_cells, standard_args  # noqa: E402
+from _figlib import load_cells, standard_args, filter_model, savefig_both  # noqa: E402
 
 
 def main() -> None:
     args = standard_args(__doc__)
-    cells = load_cells(args.results)
+    cells = filter_model(load_cells(args.results), args.model)
 
     import matplotlib
 
@@ -45,7 +45,7 @@ def main() -> None:
     ax.set_title("Accuracy vs speed at matched bytes")
     ax.legend(fontsize=8)
     fig.tight_layout()
-    fig.savefig(args.out)
+    savefig_both(fig, args.out)
     print(f"[fig5] wrote {args.out}")
 
 

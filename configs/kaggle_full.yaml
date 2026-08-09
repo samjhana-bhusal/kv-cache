@@ -19,6 +19,10 @@ device_map: auto
 context_lengths:
   - 4096
 
+# LongBench natural contexts reach 30k+ tokens; cap them to this to fit the GPU and stay
+# context-comparable to RULER. RULER is already fixed-length, so this only affects LongBench.
+max_context_length: 4096
+
 # byte-audit knob (kvbench.run) — now also records byte_decomposition + peak-prefill transient
 ratios:
   - 0.25

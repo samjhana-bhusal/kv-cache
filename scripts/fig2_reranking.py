@@ -12,12 +12,13 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from _figlib import load_cells, standard_args  # noqa: E402
+from _figlib import load_cells, standard_args, filter_model, savefig_both  # noqa: E402
 
 
 def main() -> None:
     args = standard_args(__doc__)
-    cells = [c for c in load_cells(args.results) if c.get("kind") == "accuracy" and not c.get("failed")]
+    cells = [c for c in filter_model(load_cells(args.results), args.model)
+             if c.get("kind") == "accuracy" and not c.get("failed")]
     if not cells:
         sys.exit("[fig2] no accuracy cells (results/acc__*.json) — run kvbench.eval first.")
     # Prefer RULER (standard benchmark) over synthetic NIAH when both are present.
@@ -58,7 +59,7 @@ def main() -> None:
 
     fig.suptitle(f"Ratios vs bytes (ctx={ctx})")
     fig.tight_layout()
-    fig.savefig(args.out)
+    savefig_both(fig, args.out)
     print(f"[fig2] wrote {args.out} from {len(cells)} accuracy cells")
 
 

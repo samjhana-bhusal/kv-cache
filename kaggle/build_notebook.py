@@ -33,6 +33,7 @@ MODULES = [
     "scripts/fig3_decomposition.py",
     "scripts/fig5_latency.py",
     "scripts/table1_rank.py",
+    "scripts/cross_model_summary.py",
     "configs/kaggle.yaml",
     "configs/kaggle_ruler.yaml",
     "configs/kaggle_full.yaml",
@@ -261,16 +262,35 @@ def build_full() -> dict:
     ))
 
     cells.append(md_cell(
-        "## 4. (Optional) trim the config\n"
-        "Default is Mistral-7B, ctx 4096, 50 items/cell. Uncomment to shrink for a fast first run,\n"
-        "or to add Llama-3.1-8B (gated — needs an HF token; see kaggle/README.md)."
+        "## 4a. (Optional) Hugging Face token — only needed for gated models (Llama-3.1-8B)\n"
+        "Mistral-7B is open and needs no token. For Llama: add your token under **Add-ons → Secrets**\n"
+        "as `HF_TOKEN`, then run this cell. Skip it otherwise."
     ))
     cells.append(code_cell(
-        "# import yaml\n"
-        "# cfg = yaml.safe_load(open('/kaggle/working/configs/kaggle_full.yaml'))\n"
+        "try:\n"
+        "    from kaggle_secrets import UserSecretsClient\n"
+        "    import os\n"
+        "    os.environ['HF_TOKEN'] = UserSecretsClient().get_secret('HF_TOKEN')\n"
+        "    from huggingface_hub import login; login(os.environ['HF_TOKEN'])\n"
+        "    print('HF token set — gated models enabled')\n"
+        "except Exception as e:\n"
+        "    print('No HF token (fine for open models like Mistral):', e)\n"
+    ))
+    cells.append(md_cell(
+        "## 4b. (Optional) trim the config\n"
+        "Default: Mistral-7B, ctx 4096, 50 items/cell. Edit here to add models (each runs\n"
+        "sequentially — one model on the GPU at a time, sharded across both T4s), shrink `n_items`\n"
+        "for a fast first run, or set `max_context_length` (LongBench contexts reach 30k+ tokens and\n"
+        "are capped to this to fit the GPU; default = the context length)."
+    ))
+    cells.append(code_cell(
+        "import yaml\n"
+        "cfg = yaml.safe_load(open('/kaggle/working/configs/kaggle_full.yaml'))\n"
+        "# cfg['models'] = ['mistralai/Mistral-7B-Instruct-v0.3', 'meta-llama/Llama-3.1-8B-Instruct']\n"
         "# cfg['n_items'] = 20\n"
-        "# yaml.safe_dump(cfg, open('/kaggle/working/configs/kaggle_full.yaml','w'))\n"
-        "# print(open('/kaggle/working/configs/kaggle_full.yaml').read())\n"
+        "cfg.setdefault('max_context_length', 4096)   # LongBench safety cap\n"
+        "yaml.safe_dump(cfg, open('/kaggle/working/configs/kaggle_full.yaml','w'))\n"
+        "print(open('/kaggle/working/configs/kaggle_full.yaml').read())\n"
     ))
 
     cells.append(md_cell(
@@ -309,16 +329,36 @@ def build_full() -> dict:
     cells.append(md_cell("### flush GPU"))
     cells.append(_flush_cell())
 
-    cells.append(md_cell("## 8. Generate every figure + table"))
+    cells.append(md_cell(
+        "## 8. Generate figures (per model) + cross-model summary\n"
+        "Each figure is written both as `.pdf` (for the paper) and `.png` (to view here). With\n"
+        "multiple models, per-model figures are emitted (`fig1_<model>.pdf`), plus a cross-model\n"
+        "summary table — the figure-independent evidence that the taxonomy holds across families."
+    ))
     cells.append(code_cell(
-        "for s,out in [('fig1_mispricing','fig1_mispricing.pdf'),"
-        "('fig2_reranking','fig2_reranking.pdf'),('fig3_decomposition','fig3_decomposition.pdf'),"
-        "('fig5_latency','fig5_latency.pdf')]:\n"
-        "    os.system(f'PYTHONPATH=/kaggle/working/src python scripts/{s}.py "
-        "--results results --out reports/figures/{out}')\n"
-        "os.system('PYTHONPATH=/kaggle/working/src python scripts/table1_rank.py "
-        "--results results --out reports/figures/table1_rank.tex')\n"
-        "print(open('reports/figures/table1_rank.tex').read())\n"
+        "import glob, json, os, subprocess\n"
+        "ENV = dict(os.environ, PYTHONPATH='/kaggle/working/src')\n"
+        "def sh(*a): subprocess.run(a, env=ENV, cwd='/kaggle/working')\n"
+        "cells = [json.load(open(p)) for p in glob.glob('results/*.json')]\n"
+        "models = sorted({c.get('model') for c in cells if c.get('model')})\n"
+        "print('models present:', models)\n"
+        "for m in models:\n"
+        "    tag = m.split('/')[-1]\n"
+        "    for s in ['fig1_mispricing','fig2_reranking','fig3_decomposition','fig5_latency']:\n"
+        "        sh('python', f'scripts/{s}.py', '--results', 'results', '--model', tag,\n"
+        "           '--out', f'reports/figures/{s}__{tag}.pdf')\n"
+        "    sh('python', 'scripts/table1_rank.py', '--results', 'results', '--model', tag,\n"
+        "       '--out', f'reports/figures/table1_rank__{tag}.tex')\n"
+        "sh('python', 'scripts/cross_model_summary.py', '--results', 'results',\n"
+        "   '--out', 'reports/figures/cross_model_summary.tex')\n"
+        "print(open('reports/figures/cross_model_summary.tex').read())\n"
+    ))
+    cells.append(md_cell("### Preview the cross-model summary + one model's figures (PNG)"))
+    cells.append(code_cell(
+        "from IPython.display import Image, display\n"
+        "import glob\n"
+        "for png in sorted(glob.glob('reports/figures/*.png'))[:8]:\n"
+        "    print(png); display(Image(png))\n"
     ))
 
     cells.append(md_cell("## 9. Package artifact"))

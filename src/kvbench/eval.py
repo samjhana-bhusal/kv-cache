@@ -77,6 +77,7 @@ def _pred_text(out) -> str:
 def _time_call(pipe, device, context, **kwargs) -> tuple[str, float, int]:
     """Run one pipeline call with device sync around it; return (text, seconds, new_tokens).
     `context` is passed positionally — the kvpress pipeline requires it as the first argument."""
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}  # drop unset (e.g. max_context_length)
     kvdev.synchronize(device)
     t0 = time.perf_counter()
     out = pipe(context, **kwargs)
@@ -88,9 +89,11 @@ def _time_call(pipe, device, context, **kwargs) -> tuple[str, float, int]:
 
 
 def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, device, ruler_items=None,
-                   longbench_items=None):
+                   longbench_items=None, max_ctx=None):
     """Return (accuracy, generation_tokens_per_s). Throughput is device-synced end-to-end
-    (prefill+decode) generation rate, aggregated over the cell's items."""
+    (prefill+decode) generation rate, aggregated over the cell's items. `max_ctx` caps the context
+    fed to the pipeline (essential for LongBench, whose natural contexts reach 30k+ tokens and would
+    OOM a T4); it also makes LongBench context-comparable to RULER at the same budget."""
     press = build_press(meth, ratio)
     if hasattr(press, "post_init_from_model"):
         try:
@@ -103,14 +106,14 @@ def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, device, rul
         for item in ruler_items:
             text, dt, ntok = _time_call(pipe, device, item.context, question=item.question,
                                         answer_prefix=item.answer_prefix, press=press,
-                                        max_new_tokens=item.max_new_tokens)
+                                        max_new_tokens=item.max_new_tokens, max_context_length=max_ctx)
             hits += ruler_task.score_item(text, item); n += 1
             tot_time += dt; tot_tok += ntok
     elif task == "longbench":
         for item in longbench_items:
             text, dt, ntok = _time_call(pipe, device, item.context, question=item.question,
                                         answer_prefix=item.answer_prefix, press=press,
-                                        max_new_tokens=item.max_new_tokens)
+                                        max_new_tokens=item.max_new_tokens, max_context_length=max_ctx)
             hits += lb_task.score_item(text, item); n += 1
             tot_time += dt; tot_tok += ntok
     else:  # synthetic needle-in-a-haystack
@@ -163,8 +166,10 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
                     continue
                 try:
                     realized_frac = frac_fn(ratio)
+                    # Cap context to this cell's budget — critical for LongBench (30k+ contexts).
+                    max_ctx = cfg.get("max_context_length", ctx)
                     acc, tps = _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task,
-                                              device, ruler_items, longbench_items)
+                                              device, ruler_items, longbench_items, max_ctx=max_ctx)
                     rec = {
                         "cell": cid, "kind": "accuracy", "task": task,
                         "method": meth, "model": model_name,

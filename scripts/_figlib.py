@@ -16,8 +16,23 @@ import sys
 def standard_args(description: str) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=description)
     ap.add_argument("--results", required=True, help="directory of results/*.json cells")
-    ap.add_argument("--out", required=True, help="output PDF path")
+    ap.add_argument("--out", required=True, help="output path (.pdf; a .png twin is also written)")
+    ap.add_argument("--model", default=None, help="restrict to one model (substring match)")
     return ap.parse_args()
+
+
+def filter_model(cells: list[dict], model: str | None) -> list[dict]:
+    """Restrict cells to one model by substring (e.g. 'Mistral', '3B'). No-op if model is None."""
+    if not model:
+        return cells
+    return [c for c in cells if model.lower() in str(c.get("model", "")).lower()]
+
+
+def savefig_both(fig, out: str) -> None:
+    """Save the figure as both PDF (vector, for the paper) and PNG (raster, for quick viewing)."""
+    fig.savefig(out)
+    png = out[:-4] + ".png" if out.lower().endswith(".pdf") else out + ".png"
+    fig.savefig(png, dpi=150)
 
 
 def load_cells(results_dir: str) -> list[dict]:

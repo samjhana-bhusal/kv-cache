@@ -11,12 +11,12 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from _figlib import load_cells, standard_args  # noqa: E402
+from _figlib import load_cells, standard_args, filter_model, savefig_both  # noqa: E402
 
 
 def main() -> None:
     args = standard_args(__doc__)
-    cells = load_cells(args.results)
+    cells = filter_model(load_cells(args.results), args.model)
 
     import matplotlib
 
@@ -53,7 +53,7 @@ def main() -> None:
     ax.legend(fontsize=8, loc="center left", bbox_to_anchor=(1.01, 0.5))
     ax.set_title(f"Ratios are not bytes (ctx={ctx})")
     fig.tight_layout()
-    fig.savefig(args.out)
+    savefig_both(fig, args.out)
     print(f"[fig1] wrote {args.out} from {len(cells)} cells, {len(series)} methods")
 
 

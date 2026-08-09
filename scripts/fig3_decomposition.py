@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from _figlib import load_cells, standard_args  # noqa: E402
+from _figlib import load_cells, standard_args, filter_model, savefig_both  # noqa: E402
 
 COMPONENTS = ["payload", "meta", "peak_prefill_transient"]
 LABELS = {"payload": "K/V payload", "meta": "metadata", "peak_prefill_transient": "peak-prefill transient"}
@@ -20,7 +20,7 @@ LABELS = {"payload": "K/V payload", "meta": "metadata", "peak_prefill_transient"
 
 def main() -> None:
     args = standard_args(__doc__)
-    cells = [c for c in load_cells(args.results)
+    cells = [c for c in filter_model(load_cells(args.results), args.model)
              if "byte_decomposition" in c and not c.get("failed") and c.get("kind") != "accuracy"]
     if not cells:
         sys.exit("[fig3] no audit cells with byte_decomposition — run kvbench.run (updated) first.")
@@ -58,7 +58,7 @@ def main() -> None:
     ax.legend(fontsize=8)
     plt.xticks(rotation=25, ha="right")
     fig.tight_layout()
-    fig.savefig(args.out)
+    savefig_both(fig, args.out)
     print(f"[fig3] wrote {args.out} for {len(methods)} methods ({model}, ctx={ctx})")
 
 
