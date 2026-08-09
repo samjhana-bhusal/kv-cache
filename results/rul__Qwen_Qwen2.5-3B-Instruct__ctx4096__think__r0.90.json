@@ -1,0 +1,18 @@
+{
+  "cell": "rul__Qwen_Qwen2.5-3B-Instruct__ctx4096__think__r0.90",
+  "kind": "accuracy",
+  "task": "ruler",
+  "method": "think",
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "context_len": 4096,
+  "nominal_ratio": 0.9,
+  "realized_fraction": 1.0,
+  "realized_bytes": 163160064,
+  "full_cache_bytes": 163160064,
+  "accuracy": 0.022000000000000002,
+  "n_items": 50,
+  "query_aware": false,
+  "taxonomy_prior": "incommensurable",
+  "device": "cuda",
+  "timestamp": 1786231457.8037689
+}

@@ -13,9 +13,11 @@ models:
 
 # device_map: auto
 
+# 4096 fits a single T4 for 3B. 8192 OOMs one T4 (its attention alone wants ~5 GB on top of
+# weights) — enable it only WITH `device_map: auto` above (both T4s), or on a larger GPU.
 context_lengths:
   - 4096
-  - 8192
+  # - 8192   # needs device_map: auto
 
 nominal_ratios:
   - 0.10

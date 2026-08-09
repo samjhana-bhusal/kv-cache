@@ -1,0 +1,18 @@
+{
+  "cell": "rul__Qwen_Qwen2.5-3B-Instruct__ctx4096__adakv__r0.90",
+  "kind": "accuracy",
+  "task": "ruler",
+  "method": "adakv",
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "context_len": 4096,
+  "nominal_ratio": 0.9,
+  "realized_fraction": 1.042193854496159,
+  "realized_bytes": 170044416,
+  "full_cache_bytes": 163160064,
+  "accuracy": 0.0,
+  "n_items": 50,
+  "query_aware": true,
+  "taxonomy_prior": "simulation-only",
+  "device": "cuda",
+  "timestamp": 1786228823.4536397
+}

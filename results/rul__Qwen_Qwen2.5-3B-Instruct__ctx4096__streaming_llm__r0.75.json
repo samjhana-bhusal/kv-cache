@@ -1,0 +1,18 @@
+{
+  "cell": "rul__Qwen_Qwen2.5-3B-Instruct__ctx4096__streaming_llm__r0.75",
+  "kind": "accuracy",
+  "task": "ruler",
+  "method": "streaming_llm",
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "context_len": 4096,
+  "nominal_ratio": 0.75,
+  "realized_fraction": 0.24988703117939448,
+  "realized_bytes": 40771584,
+  "full_cache_bytes": 163160064,
+  "accuracy": 0.3760000000000001,
+  "n_items": 50,
+  "query_aware": false,
+  "taxonomy_prior": "memory-faithful",
+  "device": "cuda",
+  "timestamp": 1786220847.1701236
+}
