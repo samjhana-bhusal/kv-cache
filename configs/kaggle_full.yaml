@@ -1,0 +1,44 @@
+# Second-model / all-experiments sweep, for Kaggle T4x2.
+# Purpose: address the two reviewer asks in one run —
+#   (1) second model FAMILY (Mistral-7B, GQA group=4 — different from Qwen's group=8) proving the
+#       byte findings + GQA memory bound are not Qwen-specific;
+#   (2) the two previously-unfinished measurements: byte decomposition (audit) + decode latency (eval).
+# Also adds a second BENCHMARK (LongBench QA) alongside RULER.
+#
+# device_map: auto shards 7B across both T4s. All methods run on SDPA (no observed_attention),
+# which is the T4-stable path. The notebook runs three passes (audit / RULER / LongBench) as
+# separate processes, so the GPU is fully flushed between them.
+
+models:
+  - mistralai/Mistral-7B-Instruct-v0.3   # GQA: 32 q-heads / 8 kv-heads (group 4), 32 layers
+  # - meta-llama/Llama-3.1-8B-Instruct    # GQA group 4 too; gated — needs HF token (see README)
+  # - Qwen/Qwen2.5-3B-Instruct            # already done in v1; uncomment to redo alongside
+
+device_map: auto
+
+context_lengths:
+  - 4096
+
+# byte-audit knob (kvbench.run) — now also records byte_decomposition + peak-prefill transient
+ratios:
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+# accuracy sweep knob (kvbench.eval) — now also records decode_tokens_per_s
+nominal_ratios:
+  - 0.10
+  - 0.25
+  - 0.50
+  - 0.75
+  - 0.90
+
+methods:
+  - random
+  - streaming_llm
+  - snapkv
+  - adakv
+  - think
+
+n_items: 50

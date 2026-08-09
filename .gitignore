@@ -21,3 +21,6 @@ venv/
 *.safetensors
 *.bin
 hf_cache/
+
+# macOS
+.DS_Store

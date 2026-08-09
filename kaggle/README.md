@@ -1,8 +1,16 @@
 # Running kv-bench on Kaggle
 
-`kvbench_kaggle.ipynb` is **self-contained** — it rebuilds the whole `kvbench` package inside the
-notebook, so you don't need GitHub or a dataset upload. Regenerate it after any source change with
-`python kaggle/build_notebook.py` (it reads the real `src/` and `scripts/`, so it never drifts).
+Two self-contained notebooks (each rebuilds the whole `kvbench` package inside the notebook — no
+GitHub or dataset upload needed). Regenerate both after any source change with
+`python kaggle/build_notebook.py` (it reads the real `src/` and `scripts/`, so they never drift).
+
+- **`kvbench_kaggle.ipynb`** — the original run: byte audit + RULER re-ranking on Qwen (done in v1).
+- **`kvbench_full.ipynb`** — the second-model / all-experiments run. Addresses both reviewer asks in
+  one notebook: a second model family (**Mistral-7B**, GQA group 4 vs Qwen's group 8), the two
+  previously-unfinished measurements (**byte decomposition** and **decode latency**), and a second
+  benchmark (**LongBench QA**, token-F1). Runs audit → RULER → LongBench as separate passes with an
+  explicit **GPU flush** between each (free-memory printouts confirm it). Produces Fig 1/2/3/5 +
+  Table 1. Budget ~2–4 h on T4×2; trim `n_items` in the config cell for a fast check.
 
 ## Steps
 
