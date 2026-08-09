@@ -15,6 +15,11 @@ models:
   # - Qwen/Qwen2.5-3B-Instruct            # already done in v1; uncomment to redo alongside
 
 device_map: auto
+# If the run prints "CUDA devices visible: 1" and then OOMs, your session has ONE 16 GB GPU —
+# a 7-8B model fills it with no room for the forward. Uncomment to load weights in 4-bit
+# (KV cache stays fp16, so byte accounting is unaffected). Needs bitsandbytes (in the notebook
+# install). With 2 GPUs visible you should NOT need this — weights are balanced across both.
+# quantize: 4bit
 
 context_lengths:
   - 4096

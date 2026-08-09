@@ -240,10 +240,13 @@ def build_full() -> dict:
 
     cells.append(md_cell("## 1. Install"))
     cells.append(code_cell(
-        "!pip install -q kvpress matplotlib pyyaml\n"
+        "!pip install -q kvpress matplotlib pyyaml bitsandbytes\n"
         "import torch\n"
         "print('CUDA:', torch.cuda.is_available(), '| GPUs:', torch.cuda.device_count())\n"
         "assert torch.cuda.is_available(), 'Enable GPU: Settings -> Accelerator -> GPU'\n"
+        "if torch.cuda.device_count() < 2:\n"
+        "    print('WARNING: only 1 GPU visible. For 7-8B, either pick GPU T4 x2 in Settings, or\\n'\n"
+        "          '         set `quantize: 4bit` in the config cell below (needs bitsandbytes).')\n"
     ))
 
     cells.append(md_cell("## 2. Write the kvbench sources"))

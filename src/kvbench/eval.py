@@ -33,10 +33,17 @@ from kvbench import ruler as ruler_task
 from kvbench import longbench as lb_task
 
 
-def measure_fraction_fn(model, tokenizer, modules, context, device):
-    """Return f(ratio)->realized_fraction by prefilling `context` under the press at that ratio."""
+def measure_fraction_fn(model, tokenizer, modules, context, device, max_ctx=None):
+    """Return f(ratio)->realized_fraction by prefilling `context` under the press at that ratio.
+
+    `max_ctx` truncates the calibration context — essential when the calibration item is a raw
+    LongBench context (30k+ tokens), whose full-attention forward would OOM. RULER contexts are
+    already fixed-length so this is a no-op for them."""
     in_dev = kvdev.input_device(model, device)
-    ids = tokenizer(context, return_tensors="pt").input_ids.to(in_dev)
+    ids = tokenizer(context, return_tensors="pt").input_ids
+    if max_ctx:
+        ids = ids[:, :max_ctx]
+    ids = ids.to(in_dev)
     with torch.no_grad():
         full = kb.measure(model(ids, use_cache=True).past_key_values)
 
@@ -145,6 +152,7 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
     tag = {"ruler": "rul", "longbench": "lbn"}.get(task, "acc")
 
     for ctx in cfg["context_lengths"]:
+        max_ctx = cfg.get("max_context_length", ctx)  # cap for LongBench's 30k+ contexts
         # Load benchmark items for this context length once, reuse across method/ratio cells.
         ruler_items = ruler_task.load_ruler(ctx, n_items) if task == "ruler" else None
         longbench_items = lb_task.load_longbench(n_items) if task == "longbench" else None
@@ -157,7 +165,8 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
             calib = make_needle(tokenizer, ctx, seed=999, depth=0.5).context
         for meth in cfg["methods"]:
             method_name.value = meth
-            frac_fn, full_bytes = measure_fraction_fn(model, tokenizer, modules, calib, device)
+            frac_fn, full_bytes = measure_fraction_fn(model, tokenizer, modules, calib, device,
+                                                      max_ctx=max_ctx)
             for ratio in cfg["nominal_ratios"]:
                 cid = f"{tag}__{model_name.replace('/', '_')}__ctx{ctx}__{meth}__r{ratio:.2f}"
                 path = os.path.join(results_dir, cid + ".json")
@@ -215,7 +224,7 @@ def main() -> int:
         attn = "eager" if needs_eager else "sdpa"
         print(f"loading {model_name} (attn={attn}, device_map={device_map}) ...")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = kvdev.load_model(model_name, dtype, attn, device, device_map)
+        model = kvdev.load_model(model_name, dtype, attn, device, device_map, cfg.get("quantize"))
         modules = kb.collect_attention_modules(model)
         run(model, tokenizer, modules, cfg, model_name, device, args.results)
         del model

@@ -146,7 +146,7 @@ def main() -> int:
         attn_impl = "eager" if any(m in EAGER_METHODS for m in cfg["methods"]) else "sdpa"
         print(f"loading {model_name} (attn={attn_impl}, device_map={device_map}) ...")
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = kvdev.load_model(model_name, dtype, attn_impl, device, device_map)
+        model = kvdev.load_model(model_name, dtype, attn_impl, device, device_map, cfg.get("quantize"))
         in_dev = kvdev.input_device(model, device)
 
         modules = kb.collect_attention_modules(model)

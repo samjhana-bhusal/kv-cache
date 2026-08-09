@@ -72,16 +72,50 @@ def input_device(model, fallback: torch.device) -> torch.device:
     return fallback
 
 
-def load_model(model_name, dtype, attn_impl, device, device_map=None):
+def _balanced_max_memory(headroom_gib: float = 5.0):
+    """Per-GPU memory caps that leave headroom for activations.
+
+    `device_map='auto'` greedily fills GPU 0, then spills — so a 7B (~14 GB) lands entirely on one
+    16 GB T4 with no room for the attention forward, and OOMs. Capping each GPU below its capacity
+    forces accelerate to spread the weights and leaves room for activations. GPU 0 gets the most
+    headroom because inputs/embeddings/activations accumulate there.
+    """
+    n = torch.cuda.device_count()
+    if n <= 1:
+        return None
+    mm = {}
+    for i in range(n):
+        cap = torch.cuda.get_device_properties(i).total_memory / 1024**3
+        reserve = headroom_gib if i == 0 else 1.5
+        mm[i] = f"{max(1.0, cap - reserve):.0f}GiB"
+    return mm
+
+
+def load_model(model_name, dtype, attn_impl, device, device_map=None, quantize=None):
     """Load a causal LM portably across single-device (.to) and multi-GPU (device_map=auto).
 
     Uses `dtype=` (not the deprecated `torch_dtype=`). When device_map is set (e.g. "auto" on a
-    Kaggle T4x2), transformers shards the model across GPUs and we do NOT call .to(device).
+    Kaggle T4x2), the model is sharded across GPUs with per-GPU memory caps that reserve activation
+    headroom (see _balanced_max_memory), and we do NOT call .to(device). `quantize='4bit'` loads
+    weights in 4-bit (bitsandbytes) so a 7-8B model fits a single 16 GB GPU — the KV cache stays in
+    `dtype`, so byte accounting is unaffected.
     """
     from transformers import AutoModelForCausalLM
 
     kwargs = dict(dtype=dtype, attn_implementation=attn_impl)
+    if quantize == "4bit":
+        from transformers import BitsAndBytesConfig
+        kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=dtype, bnb_4bit_quant_type="nf4")
+        device_map = device_map or "auto"
+
     if device_map:
+        if torch.cuda.is_available():
+            print(f"  CUDA devices visible: {torch.cuda.device_count()}")
+        mm = _balanced_max_memory() if device_map == "auto" and quantize != "4bit" else None
+        if mm:
+            kwargs["max_memory"] = mm
+            print(f"  balanced max_memory: {mm}")
         model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device_map, **kwargs)
         return model.eval()
     return AutoModelForCausalLM.from_pretrained(model_name, **kwargs).to(device).eval()
