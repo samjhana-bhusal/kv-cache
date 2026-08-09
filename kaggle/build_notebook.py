@@ -25,6 +25,7 @@ MODULES = [
     "src/kvbench/run.py",
     "src/kvbench/eval.py",
     "src/kvbench/ruler.py",
+    "src/kvbench/longbench.py",
     "src/kvbench/selftest.py",
     "scripts/_figlib.py",
     "scripts/fig1_mispricing.py",
@@ -34,6 +35,7 @@ MODULES = [
     "scripts/table1_rank.py",
     "configs/kaggle.yaml",
     "configs/kaggle_ruler.yaml",
+    "configs/kaggle_full.yaml",
 ]
 
 
@@ -206,12 +208,146 @@ def build() -> dict:
     }
 
 
+def _flush_cell() -> dict:
+    """A GPU-flush cell: free the model, collect, empty the CUDA cache, and show it's reclaimed."""
+    return code_cell(
+        "import gc, torch\n"
+        "for _n in ['model','pipe','m']:\n"
+        "    if _n in globals(): del globals()[_n]\n"
+        "gc.collect(); torch.cuda.empty_cache(); torch.cuda.synchronize()\n"
+        "free,total=torch.cuda.mem_get_info()\n"
+        "print(f'GPU flushed — {free/1e9:.1f} GB free of {total/1e9:.1f} GB')\n"
+    )
+
+
+def build_full() -> dict:
+    """Second-model, all-experiments notebook: audit(+decomposition) + RULER + LongBench(+latency)
+    on Mistral-7B, with explicit GPU flushes between passes. Addresses the two reviewer asks."""
+    cells = []
+    cells.append(md_cell(
+        "# kv-bench — second model + all experiments (*Bytes, Not Ratios*)\n"
+        "\n"
+        "Addresses the two reviewer asks in one run: a **second model family** (Mistral-7B,\n"
+        "GQA group 4 — different from Qwen's group 8) and the two previously-unfinished measurements\n"
+        "(**byte decomposition** and **decode latency**), plus a **second benchmark** (LongBench QA).\n"
+        "\n"
+        "**Settings → Accelerator = GPU T4 x2, Internet = On → Run All.** Each experiment below runs\n"
+        "as its own process; the GPU is explicitly flushed between them (you'll see free-memory\n"
+        "printouts). Mistral-7B is open (no gating). Budget ~2–4 h for the full run; trim in the\n"
+        "config cell for a fast check. Results land in `/kaggle/working` and zip to an artifact."
+    ))
+
+    cells.append(md_cell("## 1. Install"))
+    cells.append(code_cell(
+        "!pip install -q kvpress matplotlib pyyaml\n"
+        "import torch\n"
+        "print('CUDA:', torch.cuda.is_available(), '| GPUs:', torch.cuda.device_count())\n"
+        "assert torch.cuda.is_available(), 'Enable GPU: Settings -> Accelerator -> GPU'\n"
+    ))
+
+    cells.append(md_cell("## 2. Write the kvbench sources"))
+    cells.append(code_cell(
+        "import os\n"
+        "for d in ['src/kvbench','scripts','configs','results','reports/figures']:\n"
+        "    os.makedirs(f'/kaggle/working/{d}', exist_ok=True)\n"
+    ))
+    for rel in MODULES:
+        cells.append(writefile_cell(rel))
+
+    cells.append(md_cell("## 3. Sanity: byte instrument"))
+    cells.append(code_cell(
+        "import os; os.chdir('/kaggle/working')\n"
+        "!PYTHONPATH=/kaggle/working/src python -m kvbench.selftest\n"
+    ))
+
+    cells.append(md_cell(
+        "## 4. (Optional) trim the config\n"
+        "Default is Mistral-7B, ctx 4096, 50 items/cell. Uncomment to shrink for a fast first run,\n"
+        "or to add Llama-3.1-8B (gated — needs an HF token; see kaggle/README.md)."
+    ))
+    cells.append(code_cell(
+        "# import yaml\n"
+        "# cfg = yaml.safe_load(open('/kaggle/working/configs/kaggle_full.yaml'))\n"
+        "# cfg['n_items'] = 20\n"
+        "# yaml.safe_dump(cfg, open('/kaggle/working/configs/kaggle_full.yaml','w'))\n"
+        "# print(open('/kaggle/working/configs/kaggle_full.yaml').read())\n"
+    ))
+
+    cells.append(md_cell(
+        "## 5. Byte audit + decomposition (Fig 1, Fig 3)\n"
+        "Records realized bytes, the memory-faithful/simulation-only/incommensurable taxonomy, and\n"
+        "now the per-method byte decomposition (payload / metadata / peak-prefill transient) on the\n"
+        "second model family."
+    ))
+    cells.append(code_cell(
+        "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.run "
+        "--config configs/kaggle_full.yaml --results results --device cuda\n"
+    ))
+    cells.append(md_cell("### flush GPU before the next experiment"))
+    cells.append(_flush_cell())
+
+    cells.append(md_cell(
+        "## 6. RULER accuracy + latency (Fig 2, Fig 5)\n"
+        "Byte-matched re-ranking on RULER, now also recording device-synced generation throughput."
+    ))
+    cells.append(code_cell(
+        "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.eval "
+        "--config configs/kaggle_full.yaml --task ruler --results results --device cuda\n"
+    ))
+    cells.append(md_cell("### flush GPU"))
+    cells.append(_flush_cell())
+
+    cells.append(md_cell(
+        "## 7. LongBench QA accuracy + latency (second benchmark)\n"
+        "Natural-text QA subsets scored with token-F1 — the second benchmark reviewers asked for.\n"
+        "Downloads LongBench on first use."
+    ))
+    cells.append(code_cell(
+        "!CUDA_LAUNCH_BLOCKING=1 PYTHONPATH=/kaggle/working/src python -m kvbench.eval "
+        "--config configs/kaggle_full.yaml --task longbench --results results --device cuda\n"
+    ))
+    cells.append(md_cell("### flush GPU"))
+    cells.append(_flush_cell())
+
+    cells.append(md_cell("## 8. Generate every figure + table"))
+    cells.append(code_cell(
+        "for s,out in [('fig1_mispricing','fig1_mispricing.pdf'),"
+        "('fig2_reranking','fig2_reranking.pdf'),('fig3_decomposition','fig3_decomposition.pdf'),"
+        "('fig5_latency','fig5_latency.pdf')]:\n"
+        "    os.system(f'PYTHONPATH=/kaggle/working/src python scripts/{s}.py "
+        "--results results --out reports/figures/{out}')\n"
+        "os.system('PYTHONPATH=/kaggle/working/src python scripts/table1_rank.py "
+        "--results results --out reports/figures/table1_rank.tex')\n"
+        "print(open('reports/figures/table1_rank.tex').read())\n"
+    ))
+
+    cells.append(md_cell("## 9. Package artifact"))
+    cells.append(code_cell(
+        "import shutil, glob\n"
+        "os.makedirs('/kaggle/working/artifact', exist_ok=True)\n"
+        "shutil.copytree('/kaggle/working/results','/kaggle/working/artifact/results',dirs_exist_ok=True)\n"
+        "shutil.copytree('/kaggle/working/reports/figures','/kaggle/working/artifact/figures',dirs_exist_ok=True)\n"
+        "shutil.make_archive('/kaggle/working/kvbench_artifacts_full','zip','/kaggle/working/artifact')\n"
+        "print(len(glob.glob('/kaggle/working/results/*.json')),'cells -> kvbench_artifacts_full.zip')\n"
+    ))
+
+    return {
+        "cells": cells,
+        "metadata": {
+            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "language_info": {"name": "python"}, "accelerator": "GPU",
+        },
+        "nbformat": 4, "nbformat_minor": 5,
+    }
+
+
 def main() -> None:
-    nb = build()
-    out = os.path.join(ROOT, "kaggle", "kvbench_kaggle.ipynb")
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(nb, f, indent=1)
-    print(f"wrote {out} ({len(nb['cells'])} cells)")
+    for builder, name in [(build, "kvbench_kaggle.ipynb"), (build_full, "kvbench_full.ipynb")]:
+        nb = builder()
+        out = os.path.join(ROOT, "kaggle", name)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(nb, f, indent=1)
+        print(f"wrote {out} ({len(nb['cells'])} cells)")
 
 
 if __name__ == "__main__":

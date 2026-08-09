@@ -30,6 +30,7 @@ from kvbench.presses import (
 from kvbench.run import EAGER_METHODS
 from kvbench.tasks import make_needle, score
 from kvbench import ruler as ruler_task
+from kvbench import longbench as lb_task
 
 
 def measure_fraction_fn(model, tokenizer, modules, context, device):
@@ -73,7 +74,23 @@ def _pred_text(out) -> str:
     return str(out)
 
 
-def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, ruler_items=None) -> float:
+def _time_call(pipe, device, context, **kwargs) -> tuple[str, float, int]:
+    """Run one pipeline call with device sync around it; return (text, seconds, new_tokens).
+    `context` is passed positionally — the kvpress pipeline requires it as the first argument."""
+    kvdev.synchronize(device)
+    t0 = time.perf_counter()
+    out = pipe(context, **kwargs)
+    kvdev.synchronize(device)
+    dt = time.perf_counter() - t0
+    text = _pred_text(out)
+    new_tok = len(pipe.tokenizer(text).input_ids) if text else 0
+    return text, dt, new_tok
+
+
+def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, device, ruler_items=None,
+                   longbench_items=None):
+    """Return (accuracy, generation_tokens_per_s). Throughput is device-synced end-to-end
+    (prefill+decode) generation rate, aggregated over the cell's items."""
     press = build_press(meth, ratio)
     if hasattr(press, "post_init_from_model"):
         try:
@@ -81,20 +98,32 @@ def _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, ruler_items
         except Exception:  # noqa: BLE001
             pass
     hits, n = 0.0, 0
+    tot_time, tot_tok = 0.0, 0
     if task == "ruler":
         for item in ruler_items:
-            out = pipe(item.context, question=item.question, answer_prefix=item.answer_prefix,
-                       press=press, max_new_tokens=item.max_new_tokens)
-            hits += ruler_task.score_item(_pred_text(out), item)
-            n += 1
+            text, dt, ntok = _time_call(pipe, device, item.context, question=item.question,
+                                        answer_prefix=item.answer_prefix, press=press,
+                                        max_new_tokens=item.max_new_tokens)
+            hits += ruler_task.score_item(text, item); n += 1
+            tot_time += dt; tot_tok += ntok
+    elif task == "longbench":
+        for item in longbench_items:
+            text, dt, ntok = _time_call(pipe, device, item.context, question=item.question,
+                                        answer_prefix=item.answer_prefix, press=press,
+                                        max_new_tokens=item.max_new_tokens)
+            hits += lb_task.score_item(text, item); n += 1
+            tot_time += dt; tot_tok += ntok
     else:  # synthetic needle-in-a-haystack
         for seed in range(n_items):
             depth = (seed + 1) / (n_items + 1)
             item = make_needle(tokenizer, ctx, seed=seed, depth=depth)
-            out = pipe(item.context, question=item.question, press=press, max_new_tokens=16)
-            hits += score(_pred_text(out), item.answer)
-            n += 1
-    return hits / n if n else 0.0
+            text, dt, ntok = _time_call(pipe, device, item.context, question=item.question,
+                                        press=press, max_new_tokens=16)
+            hits += score(text, item.answer); n += 1
+            tot_time += dt; tot_tok += ntok
+    acc = hits / n if n else 0.0
+    tps = tot_tok / tot_time if tot_time > 0 else None
+    return acc, tps
 
 
 def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
@@ -110,13 +139,19 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
     pipe = KVPressTextGenerationPipeline(model=model, tokenizer=tokenizer)
     n_items = cfg.get("n_items", 5)
     task = cfg.get("task", "niah")
-    tag = "rul" if task == "ruler" else "acc"
+    tag = {"ruler": "rul", "longbench": "lbn"}.get(task, "acc")
 
     for ctx in cfg["context_lengths"]:
-        # RULER items for this context length (loaded once, reused across method/ratio cells).
+        # Load benchmark items for this context length once, reuse across method/ratio cells.
         ruler_items = ruler_task.load_ruler(ctx, n_items) if task == "ruler" else None
-        # Calibration context: for RULER use a real item's context (right token distribution).
-        calib = ruler_items[0].context if task == "ruler" else make_needle(tokenizer, ctx, seed=999, depth=0.5).context
+        longbench_items = lb_task.load_longbench(n_items) if task == "longbench" else None
+        # Calibration context: use a real item's context so the token distribution matches.
+        if task == "ruler":
+            calib = ruler_items[0].context
+        elif task == "longbench":
+            calib = longbench_items[0].context
+        else:
+            calib = make_needle(tokenizer, ctx, seed=999, depth=0.5).context
         for meth in cfg["methods"]:
             method_name.value = meth
             frac_fn, full_bytes = measure_fraction_fn(model, tokenizer, modules, calib, device)
@@ -128,7 +163,8 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
                     continue
                 try:
                     realized_frac = frac_fn(ratio)
-                    acc = _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task, ruler_items)
+                    acc, tps = _eval_accuracy(pipe, tokenizer, ctx, meth, ratio, n_items, task,
+                                              device, ruler_items, longbench_items)
                     rec = {
                         "cell": cid, "kind": "accuracy", "task": task,
                         "method": meth, "model": model_name,
@@ -136,13 +172,15 @@ def run(model, tokenizer, modules, cfg, model_name, device, results_dir):
                         "realized_fraction": realized_frac,
                         "realized_bytes": int(realized_frac * full_bytes),
                         "full_cache_bytes": full_bytes, "accuracy": acc, "n_items": n_items,
+                        "decode_tokens_per_s": tps,
                         "query_aware": REGISTRY[meth].query_aware,
                         "taxonomy_prior": REGISTRY[meth].taxonomy_prior,
                         "device": device.type, "timestamp": time.time(),
                     }
                     with open(path, "w") as f:
                         json.dump(rec, f, indent=2)
-                    print(f"  {cid}: realized={realized_frac:.2f} acc={acc:.2f}")
+                    tps_s = f"{tps:.1f} tok/s" if tps else "n/a"
+                    print(f"  {cid}: realized={realized_frac:.2f} acc={acc:.2f} {tps_s}")
                 except Exception as e:  # noqa: BLE001 — honest failure, never interpolate
                     with open(path, "w") as f:
                         json.dump({"cell": cid, "error": repr(e), "failed": True}, f, indent=2)
@@ -154,10 +192,13 @@ def main() -> int:
     ap.add_argument("--config", required=True)
     ap.add_argument("--results", default="results")
     ap.add_argument("--device", default=None)
+    ap.add_argument("--task", default=None, help="override cfg task: niah|ruler|longbench")
     args = ap.parse_args()
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
+    if args.task:
+        cfg["task"] = args.task  # one config can drive multiple benchmarks across notebook cells
     os.makedirs(args.results, exist_ok=True)
     device = kvdev.pick_device(args.device)
     dtype = torch.float16 if device.type in ("cuda", "mps") else torch.float32

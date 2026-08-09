@@ -67,9 +67,17 @@ def run_cell(model, modules, input_ids, ctx, press_name, ratio, full, device) ->
     clear_press_state(modules)
     kvdev.empty_cache(device)
     kvdev.synchronize(device)
+    # Measure the peak-prefill transient: extra memory allocated DURING compression beyond the
+    # cache that remains after. Ratio accounting is blind to this (e.g. KVComposePress' ~2x pass).
+    kvdev.reset_peak_memory(device)
+    baseline_alloc = kvdev.current_allocated_bytes(device) or 0
     with torch.no_grad(), press(model):
         out = model(input_ids, use_cache=True)
     kvdev.synchronize(device)
+    peak_alloc = kvdev.peak_allocated_bytes(device) or 0
+    steady_alloc = kvdev.current_allocated_bytes(device) or 0
+    # transient = peak during prefill − steady state after (weights cancel out; >=0 by construction).
+    peak_prefill_transient = max(0, peak_alloc - steady_alloc)
 
     rep = kb.measure(out.past_key_values, module_list=modules)
     measured_class = classify_measured(full.total_bytes, rep.total_bytes)
@@ -86,6 +94,15 @@ def run_cell(model, modules, input_ids, ctx, press_name, ratio, full, device) ->
         "meta_breakdown": rep.meta_breakdown,
         "full_cache_bytes": full.total_bytes,
         "realized_fraction": rep.total_bytes / full.total_bytes if full.total_bytes else None,
+        # Decomposition for Fig 3 — the measurable parts: resident payload, method metadata, and the
+        # transient allocated during compression that ratio accounting never sees.
+        "byte_decomposition": {
+            "payload": rep.payload_bytes,
+            "meta": rep.meta_bytes,
+            "peak_prefill_transient": int(peak_prefill_transient),
+        },
+        "peak_prefill_transient_bytes": int(peak_prefill_transient),
+        "baseline_alloc_bytes": int(baseline_alloc),
         "taxonomy_prior": spec.taxonomy_prior,
         "taxonomy_measured": measured_class,
         "query_aware": spec.query_aware,
