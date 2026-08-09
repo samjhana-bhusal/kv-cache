@@ -36,14 +36,23 @@ intentions.
 
 ## Status
 
-- [x] Related Work written from verified citations (Phase 0/5).
-- [x] Figure pipeline wired and fail-loud (`scripts/fig*.py`, `_figlib.py`).
-- [x] `results/` populated by the Phase-2 audit + Phase-3 smoke test (Qwen2.5-0.5B, MPS).
-- [x] Fig 1 (byte audit) and Fig 2 + Table 1 (re-ranking) render **real** data.
-- [~] Quantitative claims: audit numbers filled; accuracy re-ranking is the 0.5B pilot, to be
-      replaced by the 3B/7B run on the GPU box (`configs/main.yaml`, see `../RUN.md`).
-- [ ] Fig 3 (decomposition) and Fig 5 (latency): need byte_decomposition / throughput fields —
-      still show the loud MISSING-DATA box.
+**Feature-complete for a workshop submission.** All body text is real prose (no bracketed
+placeholders); both included figures and the table render from real, committed `results/*.json`;
+all 42 bibliography entries are machine-verified against arXiv (`scripts/verify_bib.py`, clean).
+
+- [x] Related Work (9 method families, verified citations) and full Introduction/Conclusion.
+- [x] Fig 1 (byte audit): Qwen2.5-0.5B **and** 3B, MPS + Kaggle T4. Taxonomy confirmed at two scales.
+- [x] Fig 2 + Table 1 (re-ranking): real **RULER** (Qwen2.5-3B, ctx4096, 50 items/cell, 13 tasks) —
+      not the synthetic pilot. AdaKV and ThinK byte-infeasible at every level; StreamingLLM beats
+      SnapKV at every matched byte budget.
+- [x] Bibliography verified end-to-end (42/42 entries resolve against the arXiv API).
+- [ ] **Explicitly out of scope, documented in Limitations, not silently missing:** per-method byte
+      decomposition and decode-throughput-at-matched-bytes. Instrumentation stubs exist
+      (`scripts/fig3_decomposition.py`, `scripts/fig5_latency.py`) but are not in `make paper`'s
+      required build and are not referenced by `paper.tex` — they need fields
+      (`byte_decomposition`, `decode_tokens_per_s`) no current result cell carries. Adding them is
+      a mechanical extension, not a rewrite.
+- [ ] 7–8B model, 8192+ context, LongBench: named as future work in the paper, not attempted.
 
 See `../notes/prior-art.md` for why the paper is framed around bytes, `../RUN.md` for how to run,
 and the plan file for the phase-by-phase schedule.

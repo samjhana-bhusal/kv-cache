@@ -83,12 +83,39 @@ field measures them in. Code and all result files are released.
 \section{Introduction}
 \label{sec:intro}
 
-% The problem: the field budgets in tokens, reports in memory. State the three verified facts as
-% the motivation, then the contributions.
-[Placeholder prose. Motivation: token-fraction budgeting is the de facto standard (KVPress
-\texttt{compression\_ratio}; ratio/count budgets in \citealt{luo2026queryvisibility,
-garcia2026protection, yuan2024longctxbench, li2025scbench}), yet the reported quantity is presented
-as memory. Lead with the AdaKV masking finding (\S\ref{sec:audit}) as the existence proof.]
+KV cache compression papers, and the tooling built to compare them, budget compression in
+\emph{tokens}: a ``compression ratio'' fixing the fraction of cached tokens retained, or an
+absolute token count. NVIDIA's KVPress toolkit\footnote{\url{https://github.com/NVIDIA/kvpress}},
+the field's most widely used comparison harness and the one this paper audits and builds on,
+exposes exactly this knob. Recent matched-budget audits inherit it:
+\citet{luo2026queryvisibility} fix $r \in \{0.25, 0.5, 0.75, 0.9\}$ as a token fraction;
+\citet{garcia2026protection} fix an absolute token count; the earlier cross-family
+benchmark of \citet{yuan2024longctxbench} and the KV-cache-centric SCBench~\citep{li2025scbench}
+do the same. In every case the result is reported, implicitly or explicitly, as a statement about
+\emph{memory}---the resource practitioners actually care about when they compress a cache.
+
+Token fraction and memory fraction are the same quantity only under an assumption the literature
+rarely states: that every retained token costs the same number of bytes, and that nothing else is
+stored. Neither holds in general. Per-layer and per-head budget allocation (PyramidKV, Ada-KV,
+CAKE, HeadKV) changes how many bytes a ``token'' costs at different depths; methods that keep
+per-token bookkeeping (accumulated attention scores, observation-window state) spend bytes the
+token count does not see; and some implementations realize a head-wise or channel-wise budget by
+\emph{masking} the attention computation rather than by shrinking the stored tensor at all. This
+paper is about that last case, because it is the sharpest existence proof that the assumption
+fails: auditing KVPress's own \texttt{AdaKVPress} by reading its source, we find it returns the
+key/value tensors \emph{unmodified} and stores a mask for the attention computation to apply
+downstream (\S\ref{sec:audit}). A press that reports a $90\%$ compression ratio can free
+approximately none of the cache. No token-fraction benchmark can see this, because a token-fraction
+benchmark never looks at the tensor.
+
+We build a measurement instrument that reads realized bytes directly from the stored cache rather
+than inferring them from a nominal ratio, use it to classify the standard toolkit's compression
+methods into a three-way taxonomy, and re-run the field's standard comparison with the budget fixed
+in bytes instead of tokens. The result is not a gentle re-ranking: on RULER, the method that looks
+best under the field's token-fraction view is byte-infeasible---it cannot be matched to any budget
+below full cache at all---and among the methods that do genuinely compress, a method with no query
+awareness and no learned scoring beats the field's most widely deployed query-aware method at every
+matched byte budget.
 
 \paragraph{Contributions.}
 \begin{enumerate}
@@ -98,10 +125,11 @@ as memory. Lead with the AdaKV masking finding (\S\ref{sec:audit}) as the existe
   (\S\ref{sec:method}).
   \item An audit (\S\ref{sec:audit}) showing the divergence between reported compression ratio and
   realized bytes across methods on the standard toolkit, including methods that free zero memory,
-  and a first-principles account of why head-level allocation cannot help under GQA.
-  \item A byte-matched re-ranking (\S\ref{sec:rerank}) of the standard method set, quantifying how
-  the ordering changes when the budget is fixed in bytes rather than tokens, with a paired
-  latency-at-matched-bytes measurement.
+  and a first-principles account of why head-level allocation cannot help under GQA. Reproduced
+  across two model scales (0.5B, 3B).
+  \item A byte-matched re-ranking (\S\ref{sec:rerank}) of the standard method set on RULER,
+  quantifying which methods are byte-infeasible and how the standard-benchmark ordering compares
+  once the infeasible methods are removed and the rest are matched on realized bytes.
 \end{enumerate}
 
 \input{related_work}
@@ -142,10 +170,6 @@ compared at equal bytes rather than equal token fraction.
   flat lines at full-cache bytes; sink/observation-window methods diverge upward by their reserved
   allocation. Generated from real measurements only.}{fig:mispricing}
 
-\datafig{fig3_decomposition}{0.9}{%
-  Per-method byte decomposition at a fixed nominal ratio: K/V payload, sink tokens, recency window,
-  observation window, metadata, and peak-prefill transient.}{fig:decomp}
-
 \paragraph{Pilot measurement.}
 On Qwen2.5-0.5B-Instruct (GQA, 2 KV heads) at 2048-token context, the audit cleanly separates the
 three classes (Fig.~\ref{fig:mispricing}). The four memory-faithful methods---random, StreamingLLM,
@@ -161,7 +185,8 @@ GQA point is first-principles: with $2$ shared KV heads, a head-level budget can
 (layer, KV-group) storage unit regardless of implementation. The same audit on Qwen2.5-3B (2048 and
 4096 context) reproduces the taxonomy exactly---memory-faithful methods on the diagonal, AdaKV at
 $101$--$104\%$, ThinK at $100\%$---confirming the classification is a property of the implementations,
-not of scale. [Extended run: 7--8B and peak-prefill transients.]
+not of scale. We did not extend the audit to a 7--8B model or measure peak-prefill transients on
+this timeline; both are mechanical extensions of the released harness (\S\ref{sec:limitations}).
 
 \section{Byte-Matched Re-Ranking}
 \label{sec:rerank}
@@ -169,29 +194,29 @@ not of scale. [Extended run: 7--8B and peak-prefill transients.]
 \datafig{fig2_reranking}{0.98}{%
   The correction, on \textbf{RULER} (Qwen2.5-3B, 4096-token context, 50 items/cell across all 13
   RULER tasks). \textbf{Left:} RULER accuracy versus nominal compression ratio---the field's view.
-  ThinK (channel pruning) tops the panel, holding $0.87$--$0.97$ accuracy through a nominal $50\%$
-  ``compression''; AdaKV reports compression at every ratio. \textbf{Right:} the same runs against
-  realized bytes. ThinK's and AdaKV's points collapse onto $\ge\!1.0$---they never freed memory---while
-  the methods that genuinely compress spread across the axis, where the trivial sink-plus-recency
-  window (StreamingLLM) dominates the query-aware scorer (SnapKV) at every byte budget.}{fig:rerank}
+  ThinK (channel pruning) tops the panel at nominal ratios up to $0.5$, holding $0.87$--$0.97$
+  accuracy; AdaKV reports compression at every ratio. \textbf{Right:} the same runs against
+  realized bytes. ThinK's and AdaKV's points collapse onto $x\!=\!1.0$ at \emph{every} nominal
+  ratio---neither ever frees memory---while the methods that genuinely compress spread across the
+  axis, where the trivial sink-plus-recency window (StreamingLLM) dominates the query-aware scorer
+  (SnapKV) at every byte budget.}{fig:rerank}
 
 On RULER (Fig.~\ref{fig:rerank}), the standard long-context benchmark with its standard substring
 metric, the correction acts in two ways. First, it \emph{removes two of five methods from the
-comparison entirely}: AdaKV and ThinK cannot be matched to any byte budget below full cache, so they
-are byte-infeasible (Table~\ref{tab:rank}). This is the sharper failure---in the field's view ThinK is
-the strongest method shown, near-full RULER accuracy at half the nominal budget, an apparent result
-any token-denominated benchmark would report and that vanishes the moment memory is measured. A
-leaderboard can be topped by a method that does not compress. Second, among the methods that do
-compress, StreamingLLM dominates at every byte budget ($0.92/0.80/0.62/0.38/0.18$ at realized
-$0.90/0.75/0.50/0.25/0.10$), while the query-aware SnapKV never leads---beating random only at the
-most aggressive budgets and trailing the trivial recency window throughout. On a benchmark whose
-questions sit last, and which therefore favours query-aware selection, the sophisticated method still
-loses to a sliding window at matched memory.
-
-\datafig{fig5_latency}{0.72}{%
-  Accuracy per byte per second at matched bytes: methods that free no bytes also yield no decode
-  speedup, while being ranked as if they saved both. [To generate: add decode\_tokens\_per\_s to the
-  eval cells.]}{fig:latency}
+comparison entirely}: ThinK realizes exactly $100\%$ of full-cache bytes and AdaKV realizes
+$100$--$104\%$ (rising with nominal ratio, as in \S\ref{sec:audit}) at every ratio we test, so
+neither can be matched to any byte budget below full cache---both are byte-infeasible at every level
+(Table~\ref{tab:rank}). This is the sharper failure. In the field's view ThinK is the
+strongest method shown at moderate nominal ratios ($0.87$--$0.97$ accuracy up to nominal $0.5$,
+falling to $0.02$ at $0.75$--$0.9$ as channel pruning becomes destructive)---an apparent result any
+token-denominated benchmark would report at its best operating point, and that vanishes the moment
+memory is measured, since that operating point costs no memory at all. A leaderboard can be topped
+by a method that does not compress. Second, among the methods that do compress, StreamingLLM
+dominates at every byte budget ($0.92/0.80/0.62/0.38/0.18$ at realized $0.90/0.75/0.50/0.25/0.10$),
+while the query-aware SnapKV never leads---beating random only at the most aggressive budgets and
+trailing the trivial recency window throughout. On a benchmark whose questions sit last, and which
+therefore favours query-aware selection, the sophisticated method still loses to a sliding window at
+matched memory.
 
 \begin{table}[t]
   \centering
@@ -211,10 +236,15 @@ loses to a sliding window at matched memory.
 Single toolkit (NVIDIA KVPress) --- the finding is about how the field's standard implementations
 account for memory, not a claim that every method's algorithm is flawed. Masking is a legitimate way
 to study accuracy; the defect is the field's failure to distinguish simulation-faithful from
-memory-faithful implementations. Pilot model/benchmark coverage is intentionally narrow; the extended
-version broadens it. Allocator granularity puts a floor on byte-measurement precision, reported
-explicitly. Concurrent work~\citep{luo2026queryvisibility} covers the query-visibility axis, which we
-do not re-claim.
+memory-faithful implementations. Allocator granularity puts a floor on byte-measurement precision,
+reported explicitly. Concurrent work~\citep{luo2026queryvisibility} covers the query-visibility axis,
+which we do not re-claim. Two measurements we consider useful but do not report because we could not
+back them with real runs on the timeline of this draft: a per-method byte decomposition (payload
+versus sinks, recency window, observation window, and metadata) that would show \emph{where} each
+method's bytes go rather than only how many; and decode throughput at matched bytes, which would test
+whether masking-based methods also forgo the kernel speedups their token-fraction ratio implies. The
+instrumentation for both is implemented (\S\ref{sec:method}, released code) but unexercised; we report
+this as an honest gap rather than fill it with a figure the data does not support.
 
 \paragraph{Accuracy scope.} The re-ranking (Fig.~\ref{fig:rerank}) is measured on RULER at
 4096-token context on a single model (Qwen2.5-3B); the 8192 tier exceeded a single 16\,GB GPU for
@@ -230,8 +260,18 @@ LongBench (all supported by the harness) is the natural extension.
 
 \section{Conclusion}
 \label{sec:conclusion}
-[Placeholder. Bytes, not ratios: correcting the resource unit changes the comparison, and in the
-limit exposes methods that compress on paper but not in memory.]
+KV cache compression is compared, field-wide, on an axis---token fraction---that is not the
+resource anyone actually wants to save. We built the instrument to measure the resource directly,
+found by direct source inspection that a widely benchmarked method (\texttt{AdaKVPress}) realizes
+none of its reported compression, confirmed the taxonomy this implies across two model scales, and
+re-ran the field's standard comparison under the corrected unit. The result was not a gentle
+reshuffling: on RULER, the apparent best method under the field's own view is byte-infeasible, and
+among the methods that do compress, a heuristic with no learned scoring and no query awareness beats
+the field's most widely deployed query-aware method at every matched byte budget.
+Bytes, not ratios: correcting the resource unit does not just change the comparison, it can remove
+the winner from it. The harness, every result cell, and the instrumentation for the measurements we
+did not have time to complete are released so the correction can be extended---more models, longer
+contexts, LongBench, decode throughput---without re-deriving any of it.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
